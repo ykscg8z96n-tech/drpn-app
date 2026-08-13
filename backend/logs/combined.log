@@ -1,0 +1,9 @@
+{"level":"info","message":"SIGINT received, shutting down gracefully...","timestamp":"2025-08-19 04:56:41"}
+{"level":"info","message":"HTTP server closed","timestamp":"2025-08-19 04:56:41"}
+{"level":"info","message":"🚀 DRPN Server running on port 5000","timestamp":"2025-08-19 04:56:46"}
+{"environment":"development","level":"info","message":"Server started","nodeVersion":"v22.16.0","platform":"win32","port":"5000","timestamp":"2025-08-19 04:56:46"}
+{"level":"info","message":"Connected to MongoDB successfully","timestamp":"2025-08-19 04:56:47"}
+{"error":"Cast to ObjectId failed for value \"ping\" (type string) at path \"_id\" for model \"Event\"","eventId":"ping","level":"error","message":"Error fetching event details","timestamp":"2025-08-19 05:02:04"}
+{"error":"Cast to ObjectId failed for value \"ping\" (type string) at path \"_id\" for model \"Event\"","eventId":"ping","level":"error","message":"Error fetching event details","timestamp":"2025-08-19 05:02:11"}
+{"level":"info","message":"SIGINT received, shutting down gracefully...","timestamp":"2025-08-25 05:49:00"}
+{"level":"info","message":"HTTP server closed","timestamp":"2025-08-25 05:49:00"}
