@@ -53,7 +53,10 @@ open WebSocket connections — Render's free tier supports this and deploys from
 same way Vercel does.
 
 1. **MongoDB Atlas** — create a free M0 cluster if you don't have one, and a database user
-   scoped to it. Grab the connection string (`mongodb+srv://...`).
+   scoped to it. Grab the connection string (`mongodb+srv://...`). `backend/scripts/atlas-setup.sh`
+   scripts this whole step (cluster, db user, network access, connection string) via the
+   [Atlas CLI](https://www.mongodb.com/docs/atlas/cli/current/install-atlas-cli/) if you'd
+   rather not click through the dashboard - see the comment header in that file for setup.
 2. **Cloudinary** — grab your cloud name, API key and API secret from the dashboard.
 3. **Render** — [New +] → **Blueprint**, point it at this repo. It reads `render.yaml` at
    the repo root and creates the `drpn-backend` web service (root dir `backend`, free plan,
