@@ -11,9 +11,11 @@
     "build:android": "eas build --platform android",
     "build:all": "eas build --platform all",
     "build:ios:preview": "eas build --platform ios --profile preview",
-    "submit:ios": "eas submit --platform ios"
+    "submit:ios": "eas submit --platform ios",
+    "build:web": "expo export -p web"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.1",
@@ -21,27 +23,30 @@
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/stack": "^7.4.2",
     "axios": "^1.10.0",
+    "axios-mock-adapter": "^2.1.0",
     "expo": "~53.0.17",
+    "expo-image": "~2.3.2",
+    "expo-image-manipulator": "~13.1.7",
     "expo-image-picker": "~16.1.4",
+    "expo-linear-gradient": "~14.1.5",
     "expo-location": "~18.1.6",
     "expo-status-bar": "~2.2.3",
     "formik": "^2.4.6",
     "react": "19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "0.79.5",
     "react-native-deck-swiper": "^2.0.18",
     "react-native-gesture-handler": "^2.27.1",
     "react-native-gifted-chat": "^2.8.1",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-navigation": "^4.4.4",
+    "react-native-web": "^0.20.0",
     "socket.io-client": "^4.8.1",
-    "yup": "^1.6.1",
-    "expo-linear-gradient": "~14.1.5",
-    "expo-image": "~2.3.2",
-    "expo-image-manipulator": "~13.1.7"
+    "yup": "^1.6.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "playwright": "^1.63.0"
   },
   "private": true
 }
