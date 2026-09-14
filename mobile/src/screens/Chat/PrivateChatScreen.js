@@ -1,0 +1,581 @@
+// mobile/src/screens/Main/PrivateChatScreen.js - iPhone Messages Style
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+  Dimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+
+const { width } = Dimensions.get('window');
+
+export default function PrivateChatScreen({ route, navigation }) {
+  const { connectionId, otherUser } = route.params || {};
+  const { user } = useAuth();
+  
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+  const [otherUserData, setOtherUserData] = useState(otherUser || null);
+  
+  const flatListRef = useRef(null);
+
+  // Load messages
+  const loadMessages = useCallback(async (showLoadingSpinner = true) => {
+    if (!connectionId || !user?.id) {
+      setError('Missing connection information');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (showLoadingSpinner) {
+        setLoading(true);
+      }
+      setError(null);
+
+      console.log('💬 Loading private messages for connection:', connectionId);
+
+      const endpoint = `/messages/private/${connectionId}`;
+      const messagesResponse = await api.get(endpoint);
+      
+      if (messagesResponse.data.success) {
+        console.log('✅ Private messages loaded');
+        const loadedMessages = messagesResponse.data.data || [];
+        
+        // For iPhone style, newest messages at bottom (traditional chat order)
+        setMessages(loadedMessages);
+        
+        // Auto-scroll to bottom (newest messages) 
+        setTimeout(() => {
+          if (flatListRef.current && loadedMessages.length > 0) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        }, 100);
+      } else {
+        console.log('ℹ️ API returned success: false');
+        setMessages([]);
+      }
+    } catch (messagesError) {
+      console.log(`❌ Failed to load private messages:`, messagesError.response?.status);
+      if (messagesError.response?.status === 404) {
+        console.log('ℹ️ No messages found - new private chat');
+        setMessages([]);
+      } else if (showLoadingSpinner) {
+        setError(`Failed to load chat: ${messagesError.response?.data?.message || messagesError.message}`);
+      }
+    } finally {
+      if (showLoadingSpinner) {
+        setLoading(false);
+      }
+    }
+      const endpoint = `/messages/private/${connectionId}`;
+  const messagesResponse = await api.get(endpoint);
+  
+  if (messagesResponse.data.success) {
+    console.log('✅ Private messages loaded');
+    console.log('📊 Messages count:', messagesResponse.data.data?.length || 0);
+    console.log('📋 First few messages:', messagesResponse.data.data?.slice(0, 3));
+    
+    const loadedMessages = messagesResponse.data.data || [];
+    setMessages(loadedMessages);
+  }
+  }, [connectionId, user?.id]);
+
+  // Set navigation header
+  useEffect(() => {
+    navigation.setOptions({
+      title: otherUserData?.name || 'Private Chat',
+      headerStyle: {
+        backgroundColor: '#000000',
+      },
+      headerTintColor: '#FFFFFF',
+      headerTitleStyle: {
+        fontWeight: '600',
+      },
+      headerRight: () => (
+        <TouchableOpacity style={styles.headerButton}>
+          <Ionicons name="videocam" size={24} color="#0078FF" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, otherUserData]);
+
+  // Load messages on focus
+  useFocusEffect(
+    useCallback(() => {
+      if (connectionId) {
+        loadMessages();
+      }
+    }, [loadMessages, connectionId])
+  );
+
+  // Send message
+  const sendMessage = async () => {
+    const text = messageText.trim();
+    if (!text || sending) return;
+
+    setSending(true);
+    
+    try {
+      const messageData = {
+        text,
+        chatType: 'private',
+        privateConnectionId: connectionId,
+      };
+
+      console.log('📤 Sending private message:', messageData);
+
+      const response = await api.post('/messages', messageData);
+      
+      if (response.data.success) {
+        console.log('✅ Private message sent successfully');
+        setMessageText('');
+        
+        // Add message to local state immediately
+        const newMessage = {
+          _id: response.data.data._id || Date.now().toString(),
+          text,
+          sender: user,
+          createdAt: new Date().toISOString(),
+          isOwn: true
+        };
+        setMessages(prev => [...prev, newMessage]);
+        
+        // Scroll to bottom
+        setTimeout(() => {
+          if (flatListRef.current) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        }, 100);
+      } else {
+        throw new Error('Server returned success: false');
+      }
+    } catch (error) {
+      console.error('❌ Error sending private message:', error);
+      Alert.alert('Error', `Failed to send message: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Format time like iPhone Messages
+  const formatTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  // Get user initials
+  const getInitials = (name) => {
+    return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
+  };
+
+  // Render message item (iPhone Messages style)
+  const renderMessage = ({ item, index }) => {
+    const isOwn = item.sender?._id === user?.id || item.isOwn;
+    const senderName = item.sender?.name || 'Unknown User';
+    
+    // Check if we should show timestamp (show every few messages or if time gap is large)
+    const previousMessage = index > 0 ? messages[index - 1] : null;
+    const showTimestamp = !previousMessage || 
+      new Date(item.createdAt) - new Date(previousMessage.createdAt) > 5 * 60 * 1000; // 5 minutes
+    
+    return (
+      <View style={styles.messageContainer}>
+        {/* Timestamp (centered, like iPhone) */}
+        {showTimestamp && (
+          <View style={styles.timestampContainer}>
+            <Text style={styles.timestampText}>
+              {formatTime(item.createdAt)}
+            </Text>
+          </View>
+        )}
+
+        {/* Message Bubble */}
+        <View style={[
+          styles.messageBubbleContainer,
+          isOwn ? styles.ownMessageContainer : styles.otherMessageContainer
+        ]}>
+          {/* Show avatar for other user's messages */}
+          {!isOwn && (
+            <View style={styles.avatarContainer}>
+              {item.sender?.photos && item.sender.photos.length > 0 ? (
+                <Image 
+                  source={{ uri: item.sender.photos[0].url || item.sender.photos[0] }} 
+                  style={styles.messageAvatar}
+                />
+              ) : (
+                <View style={styles.messageAvatarPlaceholder}>
+                  <Text style={styles.messageAvatarText}>
+                    {getInitials(senderName)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Message Bubble */}
+          <View style={[
+            styles.messageBubble,
+            isOwn ? styles.ownMessageBubble : styles.otherMessageBubble
+          ]}>
+            <Text style={[
+              styles.messageText,
+              isOwn ? styles.ownMessageText : styles.otherMessageText
+            ]}>
+              {item.text}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // Render input area (iPhone Messages style)
+  const renderInputArea = () => (
+    <View style={styles.inputContainer}>
+      <View style={styles.inputWrapper}>
+        <View style={styles.textInputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={messageText}
+            onChangeText={setMessageText}
+            placeholder="Message"
+            placeholderTextColor="#999999"
+            multiline
+            maxLength={1000}
+          />
+        </View>
+        
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            (!messageText.trim() || sending) && styles.sendButtonDisabled
+          ]}
+          onPress={sendMessage}
+          disabled={!messageText.trim() || sending}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0078FF" />
+        <Text style={styles.loadingText}>Loading chat...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={60} color="#FF3B30" />
+        <Text style={styles.errorTitle}>Unable to Load Chat</Text>
+        <Text style={styles.errorMessage}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadMessages}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={(item) => item._id}
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyAvatarContainer}>
+              {otherUserData?.image ? (
+                <Image 
+                  source={{ uri: otherUserData.image }} 
+                  style={styles.emptyAvatar}
+                />
+              ) : (
+                <View style={styles.emptyAvatarPlaceholder}>
+                  <Text style={styles.emptyAvatarText}>
+                    {getInitials(otherUserData?.name)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.emptyStateText}>
+              {otherUserData?.name || 'Private Chat'}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              Send a message to start your conversation
+            </Text>
+          </View>
+        )}
+      />
+      
+      {renderInputArea()}
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  
+  // Header
+  headerButton: {
+    padding: 8,
+  },
+  
+  // Loading & Error States
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    backgroundColor: '#000000',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FF3B30',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#CCCCCC',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#0078FF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Messages List
+  messagesList: {
+    flex: 1,
+  },
+  messagesContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexGrow: 1,
+  },
+
+  // Message Container (iPhone style)
+  messageContainer: {
+    marginBottom: 8,
+  },
+  
+  // Timestamp (iPhone style - centered)
+  timestampContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  timestampText: {
+    fontSize: 12,
+    color: '#999999',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  // Message Bubble Container
+  messageBubbleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 2,
+  },
+  ownMessageContainer: {
+    justifyContent: 'flex-end',
+  },
+  otherMessageContainer: {
+    justifyContent: 'flex-start',
+  },
+
+  // Avatar (for other user)
+  avatarContainer: {
+    marginRight: 8,
+  },
+  messageAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  messageAvatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#333333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Message Bubble (iPhone style)
+  messageBubble: {
+    maxWidth: width * 0.75,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  ownMessageBubble: {
+    backgroundColor: '#0078FF', // iPhone blue
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    backgroundColor: '#333333', // Dark gray for dark mode
+    borderBottomLeftRadius: 4,
+  },
+
+  // Message Text
+  messageText: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  ownMessageText: {
+    color: '#FFFFFF',
+  },
+  otherMessageText: {
+    color: '#FFFFFF',
+  },
+
+  // Input Area (iPhone Messages style)
+  inputContainer: {
+    backgroundColor: '#111111',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  textInputContainer: {
+    flex: 1,
+    backgroundColor: '#333333',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    maxHeight: 100,
+  },
+  textInput: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlignVertical: 'center',
+  },
+  sendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0078FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#666666',
+  },
+
+  // Empty State
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyAvatarContainer: {
+    marginBottom: 16,
+  },
+  emptyAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  emptyAvatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#333333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  emptyStateText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#999999',
+    textAlign: 'center',
+  },
+});
