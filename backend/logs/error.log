@@ -1,2 +1,0 @@
-{"error":"Cast to ObjectId failed for value \"ping\" (type string) at path \"_id\" for model \"Event\"","eventId":"ping","level":"error","message":"Error fetching event details","timestamp":"2025-08-19 05:02:04"}
-{"error":"Cast to ObjectId failed for value \"ping\" (type string) at path \"_id\" for model \"Event\"","eventId":"ping","level":"error","message":"Error fetching event details","timestamp":"2025-08-19 05:02:11"}
