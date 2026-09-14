@@ -1,42 +1,15 @@
-// backend/src/routes/categories.js
-const express = require('express');
-const router = express.Router();
-const { CATEGORIES_ARRAY } = require('../constants/categories');
+// backend/src/constants/categories.js
+// Single source of truth for event/group categories - must match the
+// `category` enum on the Event model and the CATEGORIES the mobile app
+// hardcodes today (src/screens/Main/SwipeScreen.js and others).
 
-// @route   GET /api/categories
-// @desc    Get all available categories
-// @access  Public
-router.get('/', (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: CATEGORIES_ARRAY
-    });
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+const CATEGORIES_ARRAY = [
+  { id: 'sports', name: 'Sports', icon: 'basketball-outline', color: '#FF6B35' },
+  { id: 'golf', name: 'Golf', icon: 'golf-outline', color: '#228B22' },
+  { id: 'health', name: 'Health', icon: 'body-outline', color: '#9370DB' },
+  { id: 'fantasy', name: 'Fantasy', icon: 'trophy-outline', color: '#FFD700' },
+  { id: 'cards', name: 'Cards', icon: 'albums-outline', color: '#DC143C' },
+  { id: 'tabletop', name: 'Table Top', icon: 'cube-outline', color: '#8B4513' },
+];
 
-// @route   GET /api/categories/:id
-// @desc    Get single category details
-// @access  Public
-router.get('/:id', (req, res) => {
-  try {
-    const category = CATEGORIES_ARRAY.find(cat => cat.id === req.params.id);
-    
-    if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
-    }
-    
-    res.json({
-      success: true,
-      data: category
-    });
-  } catch (error) {
-    console.error('Error fetching category:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-module.exports = router;
+module.exports = { CATEGORIES_ARRAY };

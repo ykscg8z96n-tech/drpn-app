@@ -3,16 +3,11 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 
-// Middleware to check if user is admin (implement based on your needs)
+// Middleware to check if user is admin
 const adminOnly = (req, res, next) => {
-  // For now, just check if user exists - implement proper admin check later
-  if (!req.user) {
+  if (!req.user || !req.user.isAdmin) {
     return res.status(403).json({ success: false, message: 'Admin access required' });
   }
-  // TODO: Add proper admin role check when you implement user roles
-  // if (!req.user.isAdmin) {
-  //   return res.status(403).json({ success: false, message: 'Admin access required' });
-  // }
   next();
 };
 

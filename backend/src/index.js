@@ -5,16 +5,24 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
 const mongoose = require('mongoose');
 
 // Import socket handler
 const { handleConnection } = require('./socket/socketHandler');
+const { corsOptions, allowedOrigins } = require('./config/cors');
+const { apiLimiter } = require('./middleware/rateLimit');
 
 // Connect to MongoDB
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/drpn');
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+
+    // Safe to start once there's a DB to query - soft-deletes expired
+    // events daily (and once on boot), never hard-deletes anything.
+    require('./services/eventCleanupService').init();
   } catch (error) {
     console.error('❌ Database connection error:', error);
     process.exit(1);
@@ -27,20 +35,18 @@ connectDB();
 // Create Express app
 const app = express();
 
+// Render (and most PaaS hosts) sit behind a reverse proxy - trust its
+// X-Forwarded-For so req.ip and express-rate-limit see the real client IP
+// instead of the proxy's.
+app.set('trust proxy', 1);
+
 // Create HTTP server (required for Socket.IO)
 const server = http.createServer(app);
 
-// Initialize Socket.IO with proper CORS configuration
+// Initialize Socket.IO with the same origin allowlist as the HTTP API
 const io = socketIo(server, {
   cors: {
-    origin: [
-      "http://localhost:3000",        // Web dev server
-      "http://localhost:19006",       // Expo web
-      "http://localhost:19000",       // Expo dev server
-      "exp://localhost:19000",        // Expo protocol
-      "exp://172.20.10.2:19000",   
-      "http://172.20.10.2:19006",   
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
@@ -61,30 +67,27 @@ app.set('io', io);
 // Initialize socket handlers
 handleConnection(io);
 
-// CORS middleware for HTTP requests
-app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:19006",
-    "http://localhost:19000",
-    "exp://localhost:19000",
-    "exp://192.168.1.100:19000",    // Replace with your local IP
-    "http://192.168.1.100:19006",   // Replace with your local IP
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+// Security headers
+app.use(helmet({
+  // Cross-origin requests serve API responses & Cloudinary-hosted images,
+  // not this server's own pages, so the default restrictive CORP breaks
+  // nothing here and CSP isn't relevant to a pure JSON API.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
 }));
+
+// CORS middleware for HTTP requests
+app.use(cors(corsOptions));
+
+// Rate limiting (auth routes have their own, tighter limit - see routes/auth.js)
+app.use('/api', apiLimiter);
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging middleware (optional, but helpful for debugging)
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
-  next();
-});
+// Request logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -94,6 +97,8 @@ app.use('/api/matches', require('./routes/matches'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/participations', require('./routes/participations'));
 app.use('/api/private-connections', require('./routes/private-connections'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -142,35 +147,32 @@ io.on('error', (error) => {
 });
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully...');
-  
-  server.close(() => {
-    console.log('✅ HTTP server closed');
-    mongoose.connection.close(() => {
-      console.log('✅ Database connection closed');
-      io.close(() => {
-        console.log('✅ Socket.IO server closed');
-        process.exit(0);
-      });
-    });
-  });
-});
+const shutdown = (signal) => {
+  console.log(`🛑 ${signal} received, shutting down gracefully...`);
 
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully...');
-  
-  server.close(() => {
+  server.close(async () => {
     console.log('✅ HTTP server closed');
-    mongoose.connection.close(() => {
+    try {
+      await mongoose.connection.close();
       console.log('✅ Database connection closed');
-      io.close(() => {
-        console.log('✅ Socket.IO server closed');
-        process.exit(0);
-      });
+    } catch (err) {
+      console.error('🔴 Error closing database connection:', err);
+    }
+    io.close(() => {
+      console.log('✅ Socket.IO server closed');
+      process.exit(0);
     });
   });
-});
+
+  // Force-exit if connections don't close in time (e.g. a stuck socket)
+  setTimeout(() => {
+    console.error('🔴 Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

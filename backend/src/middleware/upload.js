@@ -17,10 +17,14 @@ const storage = new CloudinaryStorage({
       folder = 'drpn/events';
     }
     
-    // Generate a unique filename
+    // Generate a unique filename. The original name is client-controlled,
+    // so it's sanitized before touching any Cloudinary param (arbitrary
+    // argument injection via '&'-bearing params - GHSA-g4mf-96x5-5m2c).
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const nameWithoutExt = path.parse(file.originalname).name;
-    const publicId = `${nameWithoutExt}-${uniqueSuffix}`;
+    const safeName = path.parse(file.originalname).name
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .slice(0, 60) || 'photo';
+    const publicId = `${safeName}-${uniqueSuffix}`;
 
     return {
       folder: folder,
