@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../services/api';
+import { USE_MOCK_API } from '../utils/constants';
 import { useAuth } from './AuthContext';
 
 const SocketContext = createContext({});
@@ -15,8 +16,9 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     let newSocket = null;
 
-    // Only connect if we have a user with an id and a token
-    if (user && user.id && token) {
+    // Only connect if we have a user with an id and a token (skipped entirely
+    // in mock demo mode, since there is no live socket server to connect to)
+    if (!USE_MOCK_API && user && user.id && token) {
       console.log('🔌 Connecting to socket server');
       
       newSocket = io(API_BASE_URL, {
