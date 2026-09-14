@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SocketProvider } from './src/contexts/SocketContext';
@@ -45,10 +46,12 @@ function RootNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <RootNavigator />
-      </SocketProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <RootNavigator />
+        </SocketProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

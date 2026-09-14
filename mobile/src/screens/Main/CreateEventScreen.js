@@ -51,13 +51,26 @@ const SPORTS_INFO = {
   'Other': { icon: 'trophy-outline', color: '#9E9E9E' }
 };
 
-const getSportIcon = (sport) => {
-  return SPORTS_INFO[sport]?.icon || 'trophy-outline';
+const CATEGORY_INFO = {
+  sports: { name: 'Sports', icon: 'basketball-outline', color: '#FF6B35' },
+  golf: { name: 'Golf', icon: 'golf-outline', color: '#228B22' },
+  health: { name: 'Health', icon: 'body-outline', color: '#9370DB' },
+  fantasy: { name: 'Fantasy', icon: 'trophy-outline', color: '#FFD700' },
+  cards: { name: 'Cards', icon: 'albums-outline', color: '#DC143C' },
+  tabletop: { name: 'Table Top', icon: 'cube-outline', color: '#8B4513' },
 };
 
-const getSportColor = (sport) => {
-  return SPORTS_INFO[sport]?.color || '#9E9E9E';
+// Events carry `category`; `sport`/`interests` are legacy fields on older records.
+const getBadgeInfo = (item) => {
+  if (CATEGORY_INFO[item.category]) return CATEGORY_INFO[item.category];
+  const sport = item.sport || item.interests?.[0];
+  if (sport) return { name: sport, ...SPORTS_INFO[sport] };
+  return { name: 'Other', icon: 'trophy-outline', color: '#9E9E9E' };
 };
+
+const getBadgeLabel = (item) => getBadgeInfo(item).name;
+const getBadgeIcon = (item) => getBadgeInfo(item).icon || 'trophy-outline';
+const getBadgeColor = (item) => getBadgeInfo(item).color || '#9E9E9E';
 
 // Helper function to get the display image
 const getEventDisplayImage = (item) => {
@@ -123,8 +136,11 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrol
     },
   });
 
-  const pendingCount = item.pendingApplications?.length || 0;
-  const acceptedCount = item.acceptedApplications?.length || 0;
+  const applicants = item.applicants || [];
+  const pendingCount = item.pendingApplications?.length ?? applicants.filter(a => a.status === 'pending').length;
+  const acceptedCount = item.acceptedApplications?.length
+    ?? (item.type === 'group' ? item.currentMembers : item.currentAttendees)
+    ?? applicants.filter(a => a.status === 'accepted').length;
   const isPastEvent = item.type === 'event' && new Date(item.eventDate) < new Date();
 
   return (
@@ -217,14 +233,10 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrol
             <View style={styles.centerSection}>
               <View style={styles.contentRow}>
                 <View style={styles.titleSection}>
-                  <View style={[styles.sportBadge, { backgroundColor: getSportColor(item.sport || item.interests?.[0]) }]}>
-                    <Ionicons 
-                      name={getSportIcon(item.sport || item.interests?.[0])} 
-                      size={12} 
-                      color="white" 
-                    />
+                  <View style={[styles.sportBadge, { backgroundColor: getBadgeColor(item) }]}>
+                    <Ionicons name={getBadgeIcon(item)} size={12} color="white" />
                     <Text style={styles.sportBadgeText}>
-                      {item.sport || item.interests?.[0] || 'Sport'}
+                      {getBadgeLabel(item)}
                     </Text>
                   </View>
                   

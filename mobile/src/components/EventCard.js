@@ -14,8 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
-// Account for: status bar (~44) + any header space (~40) + bottom nav (~83) + margins
-const CARD_HEIGHT = height - 240;
+// Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins
+const CARD_HEIGHT = height - 265;
 
 // Stock images for each category - same as CreateNewScreen.js
 const STOCK_IMAGES = {

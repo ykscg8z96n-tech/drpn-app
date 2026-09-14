@@ -20,6 +20,9 @@ import api from '../../services/api';
 import EventCard from '../../components/EventCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFilter } from '../../contexts/FilterContext';
+import { USE_MOCK_API } from '../../utils/constants';
+
+const DEMO_LOCATION = { latitude: 30.2672, longitude: -97.7431 };
 
 const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
 
@@ -83,6 +86,10 @@ export default function SwipeScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        if (USE_MOCK_API) {
+          setUserLocation(DEMO_LOCATION);
+          return;
+        }
         Alert.alert('Permission Denied', 'Location permission is required to find nearby events.');
         setLoading(false);
         return;
@@ -93,8 +100,11 @@ export default function SwipeScreen({ navigation }) {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       });
-      console.log('Location obtained:', location.coords);
     } catch (error) {
+      if (USE_MOCK_API) {
+        setUserLocation(DEMO_LOCATION);
+        return;
+      }
       console.error('Error getting location:', error);
       Alert.alert('Error', 'Failed to get your location.');
       setLoading(false);

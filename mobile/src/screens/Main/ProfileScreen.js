@@ -666,8 +666,9 @@ export default function ProfileScreen({ navigation }) {
 
   // Calculate user's age if birthdate exists
   const calculateAge = () => {
-    if (!profile?.birthdate) return null;
-    const birth = new Date(profile.birthdate);
+    const birthDate = profile?.birthDate || profile?.birthdate;
+    if (!birthDate) return null;
+    const birth = new Date(birthDate);
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();

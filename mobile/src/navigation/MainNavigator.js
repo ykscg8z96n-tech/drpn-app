@@ -3,7 +3,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FilterProvider, useFilter } from '../contexts/FilterContext';
 
 // Tab Screens
@@ -243,6 +243,7 @@ function ProfileStack() {
 
 function TabNavigatorContent() {
   const { selectedFilter, openFilterDrawer } = useFilter();
+  const insets = useSafeAreaInsets();
 
   // Categories for icon mapping
   const CATEGORIES = {
@@ -295,13 +296,17 @@ function TabNavigatorContent() {
           backgroundColor: '#0A0A0A',
           borderTopColor: '#1A1A1A',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 90 : 70,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+          height: 80 + insets.bottom,
+          paddingBottom: 12 + insets.bottom,
           paddingTop: 10,
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 0,
         },
         headerShown: false,
       })}
