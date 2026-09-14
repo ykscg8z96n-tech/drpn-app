@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -22,6 +23,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Edit Profile');
@@ -790,7 +792,7 @@ export default function ProfileScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {renderTabBar()}
       {activeTab === 'Edit Profile' ? renderEditProfile() : renderPreview()}
     </View>

@@ -15,6 +15,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -94,9 +95,30 @@ const getEventDisplayImage = (item) => {
 };
 
 // Swipeable Event Item Component - KEEPING ORIGINAL IMPLEMENTATION
-const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrollEnabled }) => {
+const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrollEnabled, playHint, onHintPlayed }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [isRevealed, setIsRevealed] = useState(false);
+
+  // One-time peek animation showing the row slides to reveal
+  // organizer/member actions underneath.
+  useEffect(() => {
+    if (!playHint) return;
+    const peek = (toValue) =>
+      Animated.timing(translateX, { toValue, duration: 380, useNativeDriver: false });
+
+    const timer = setTimeout(() => {
+      Animated.sequence([
+        peek(-90),
+        peek(0),
+        Animated.delay(260),
+        peek(-90),
+        peek(0),
+      ]).start(() => onHintPlayed?.());
+    }, 900);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playHint]);
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {
@@ -291,7 +313,9 @@ export default function CreateEventScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  const [swipeHintPlayed, setSwipeHintPlayed] = useState(false);
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     checkOrganizerStatus();
@@ -519,7 +543,7 @@ export default function CreateEventScreen({ navigation }) {
   const filteredEvents = getFilteredEvents();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {renderTabBar()}
       
       <View style={styles.content}>
@@ -529,13 +553,15 @@ export default function CreateEventScreen({ navigation }) {
           <FlatList
             data={filteredEvents}
             keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <SwipeableEventItem
                 item={item}
                 onArchive={handleArchiveEvent}
                 onEdit={handleEditEvent}
                 onViewApplicants={handleViewApplicants}
                 onScrollEnabled={handleScrollEnabled}
+                playHint={index === 0 && !swipeHintPlayed}
+                onHintPlayed={() => setSwipeHintPlayed(true)}
               />
             )}
             refreshControl={

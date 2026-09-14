@@ -13,10 +13,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function JoinByCodeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -94,8 +96,8 @@ export default function JoinByCodeScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>

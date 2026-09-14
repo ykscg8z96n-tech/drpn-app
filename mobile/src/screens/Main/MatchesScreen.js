@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -161,6 +162,7 @@ export default function MatchesScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Load matches based on selected tab
   const loadMatches = useCallback(async (showLoading = true) => {
@@ -339,7 +341,7 @@ export default function MatchesScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         {renderTabBar()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0078FF" />
@@ -350,7 +352,7 @@ export default function MatchesScreen({ navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {renderTabBar()}
       
       <View style={styles.content}>

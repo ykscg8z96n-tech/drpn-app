@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import api from '../../services/api';
 import EventCard from '../../components/EventCard';
@@ -43,6 +44,7 @@ export default function SwipeScreen({ navigation }) {
   const [userLocation, setUserLocation] = useState(null);
   const swiperRef = useRef(null);
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { 
     selectedFilter, 
     showFilterDrawer, 
@@ -307,7 +309,7 @@ export default function SwipeScreen({ navigation }) {
 
   if (events.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.emptyContainer}>
           <Ionicons name="calendar-outline" size={64} color="#666161" />
           <Text style={styles.emptyText}>
@@ -422,7 +424,7 @@ export default function SwipeScreen({ navigation }) {
   }
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <Animated.View
           style={[
             styles.swiperContainer,
@@ -728,7 +730,7 @@ const styles = StyleSheet.create({
     swiperContainer: {
     flex: 1,
     backgroundColor: '#121212',
-    marginTop: -50, // Reduced from -50 to prevent button overlap
+    marginTop: 8,
     marginBottom: 10, // Add bottom margin for button clearance
   },
   swipeHintBadgeLeft: {

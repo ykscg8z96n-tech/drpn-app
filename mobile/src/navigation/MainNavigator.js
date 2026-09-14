@@ -41,24 +41,10 @@ function SwipeStack() {
         headerTintColor: '#FFFFFF',
       }}
     >
-      <Stack.Screen 
-        name="SwipeMain" 
-        component={SwipeScreen} 
-        options={{ 
-          title: '',
-          headerStyle: {
-            backgroundColor: '#0A0A0A',
-            borderBottomWidth: 1,
-            borderBottomColor: '#1A1A1A',
-            height: 70,
-          },
-          headerTitleStyle: {
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: '#FFFFFF',
-          },
-          headerTintColor: '#FFFFFF',
-        }}
+      <Stack.Screen
+        name="SwipeMain"
+        component={SwipeScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="JoinByCode" 
@@ -100,12 +86,10 @@ function MatchesStack() {
         headerTintColor: '#FFFFFF',
       }}
     >
-      <Stack.Screen 
-        name="MatchesMain" 
+      <Stack.Screen
+        name="MatchesMain"
         component={MatchesScreen}
-        options={{ 
-          title: '',
-        }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="Chat" 
@@ -148,12 +132,10 @@ function CreateStack() {
         headerTintColor: '#FFFFFF',
       }}
     >
-      <Stack.Screen 
-        name="CreateMain" 
+      <Stack.Screen
+        name="CreateMain"
         component={CreateEventScreen}
-        options={{ 
-          title: '',
-        }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="CreateNew" 
@@ -201,12 +183,10 @@ function InviteStack() {
         headerTintColor: '#FFFFFF',
       }}
     >
-      <Stack.Screen 
-        name="InviteMain" 
+      <Stack.Screen
+        name="InviteMain"
         component={JoinByCodeScreen}
-        options={{ 
-          title: '',
-        }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -230,12 +210,10 @@ function ProfileStack() {
         headerTintColor: '#FFFFFF',
       }}
     >
-      <Stack.Screen 
-        name="ProfileMain" 
+      <Stack.Screen
+        name="ProfileMain"
         component={ProfileScreen}
-        options={{ 
-          title: '',
-        }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
