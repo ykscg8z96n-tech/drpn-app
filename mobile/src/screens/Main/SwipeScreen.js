@@ -52,6 +52,12 @@ export default function SwipeScreen({ navigation }) {
     clearFilter 
   } = useFilter();
   const slideAnim = useRef(new Animated.Value(200)).current;
+  const swipeHintX = useRef(new Animated.Value(0)).current;
+  const swipeHintRotate = useRef(new Animated.Value(0)).current;
+  const swipeHintOpacity = useRef(new Animated.Value(0)).current;
+  const filterPulse = useRef(new Animated.Value(1)).current;
+  const filterCalloutOpacity = useRef(new Animated.Value(0)).current;
+  const hasPlayedHint = useRef(false);
 
   useEffect(() => {
     if (user) {
@@ -67,6 +73,46 @@ export default function SwipeScreen({ navigation }) {
       fetchNearbyEvents();
     }
   }, [userLocation, user, selectedFilter]);
+
+  // Play a one-time "these are swipeable / this is filterable" hint once
+  // the first batch of cards has loaded.
+  useEffect(() => {
+    if (hasPlayedHint.current || loading || events.length === 0) return;
+    hasPlayedHint.current = true;
+
+    const wiggle = (value, distance) =>
+      Animated.sequence([
+        Animated.timing(value, { toValue: distance, duration: 260, useNativeDriver: true }),
+        Animated.timing(value, { toValue: -distance, duration: 420, useNativeDriver: true }),
+        Animated.timing(value, { toValue: distance * 0.5, duration: 320, useNativeDriver: true }),
+        Animated.timing(value, { toValue: 0, duration: 260, useNativeDriver: true }),
+      ]);
+
+    const timer = setTimeout(() => {
+      Animated.sequence([
+        Animated.timing(swipeHintOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.parallel([
+          wiggle(swipeHintX, 26),
+          wiggle(swipeHintRotate, 1),
+        ]),
+        Animated.timing(swipeHintOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start(() => {
+        Animated.sequence([
+          Animated.timing(filterCalloutOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.sequence([
+            Animated.timing(filterPulse, { toValue: 1.25, duration: 220, useNativeDriver: true }),
+            Animated.timing(filterPulse, { toValue: 1, duration: 220, useNativeDriver: true }),
+            Animated.timing(filterPulse, { toValue: 1.25, duration: 220, useNativeDriver: true }),
+            Animated.timing(filterPulse, { toValue: 1, duration: 220, useNativeDriver: true }),
+          ]),
+          Animated.delay(400),
+          Animated.timing(filterCalloutOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start();
+      });
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [loading, events.length]);
 
   // Handle filter drawer opening
   useEffect(() => {
@@ -377,7 +423,34 @@ export default function SwipeScreen({ navigation }) {
 
     return (
       <View style={styles.container}>
-        <View style={styles.swiperContainer}>
+        <Animated.View
+          style={[
+            styles.swiperContainer,
+            {
+              transform: [
+                { translateX: swipeHintX },
+                {
+                  rotate: swipeHintRotate.interpolate({
+                    inputRange: [-1, 1],
+                    outputRange: ['-4deg', '4deg'],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.swipeHintBadgeLeft, { opacity: swipeHintOpacity }]}
+          >
+            <Ionicons name="close" size={18} color="#FFFFFF" />
+          </Animated.View>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.swipeHintBadgeRight, { opacity: swipeHintOpacity }]}
+          >
+            <Ionicons name="heart" size={18} color="#FFFFFF" />
+          </Animated.View>
           <Swiper
             ref={swiperRef}
             cards={events}
@@ -461,7 +534,7 @@ export default function SwipeScreen({ navigation }) {
               },
             }}
           />
-        </View>
+        </Animated.View>
 
       {/* Floating Action Buttons */}
       <View style={styles.floatingButtonsContainer}>
@@ -469,33 +542,44 @@ export default function SwipeScreen({ navigation }) {
           <Ionicons name="arrow-undo" size={24} color="#666666" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.passButton]} 
+        <TouchableOpacity
+          style={[styles.button, styles.passButton]}
           onPress={() => swiperRef.current?.swipeLeft()}
         >
           <Ionicons name="close" size={36} color="#E12112" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.superLikeButton]} 
+        <TouchableOpacity
+          style={[styles.button, styles.superLikeButton]}
           onPress={handleSuperLike}
         >
           <Ionicons name="flash" size={24} color="#F4632a" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.likeButton]} 
+        <TouchableOpacity
+          style={[styles.button, styles.likeButton]}
           onPress={() => swiperRef.current?.swipeRight()}
         >
           <Ionicons name="heart" size={36} color="#00B000" />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button]} 
-          onPress={openFilterDrawer}
-        >
-          <Ionicons name="funnel" size={24} color="#666666" />
-        </TouchableOpacity>
+        <View style={styles.filterButtonWrap}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.filterCallout, { opacity: filterCalloutOpacity }]}
+          >
+            <Text style={styles.filterCalloutText}>Tap to filter</Text>
+            <View style={styles.filterCalloutArrow} />
+          </Animated.View>
+          <TouchableOpacity
+            style={[styles.button]}
+            onPress={openFilterDrawer}
+          >
+            <Animated.View style={{ transform: [{ scale: filterPulse }] }}>
+              <Ionicons name="funnel" size={24} color="#666666" />
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter Drawer */}
@@ -646,6 +730,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
     marginTop: -50, // Reduced from -50 to prevent button overlap
     marginBottom: 10, // Add bottom margin for button clearance
+  },
+  swipeHintBadgeLeft: {
+    position: 'absolute',
+    top: '38%',
+    left: 28,
+    zIndex: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(225, 33, 18, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swipeHintBadgeRight: {
+    position: 'absolute',
+    top: '38%',
+    right: 28,
+    zIndex: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 176, 0, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonWrap: {
+    alignItems: 'center',
+  },
+  filterCallout: {
+    position: 'absolute',
+    bottom: '100%',
+    marginBottom: 10,
+    backgroundColor: '#0078FF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  filterCalloutText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterCalloutArrow: {
+    position: 'absolute',
+    bottom: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#0078FF',
   },
 // NEW: Floating buttons container
   floatingButtonsContainer: {
