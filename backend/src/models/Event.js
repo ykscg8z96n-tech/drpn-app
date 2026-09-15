@@ -81,14 +81,22 @@ const eventSchema = new mongoose.Schema({
     required: function() { return this.type === 'group'; }
   },
   
-  // Set when this event was created with "auto-invite" from an existing
-  // group - lets invited group members join directly (first-come-first-
-  // served up to capacity) instead of going through the public
-  // apply/swipe flow strangers use.
-  inviteGroupId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Event',
-    default: null
+  // Set when this event was auto-invited to one or more groups the
+  // organizer runs - lets those groups' members join directly (first-
+  // come-first-served up to capacity) instead of going through the
+  // public apply/swipe flow strangers use, and drives the event-invite
+  // card posted to each group's chat.
+  inviteGroupIds: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }],
+    default: []
+  },
+
+  // Users who tapped the red X on this event's invite card in a group
+  // chat - keeps the card from being re-clickable after a pass, the same
+  // way `applicants` does for an accept.
+  passedBy: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    default: []
   },
 
   // Organizer and admin management

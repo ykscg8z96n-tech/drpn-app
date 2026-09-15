@@ -16,7 +16,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
-import SelectModal from '../../components/SelectModal';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -51,9 +50,17 @@ export default function EditEventScreen({ route, navigation }) {
   const [location, setLocation] = useState(null);
 
   const [myGroups, setMyGroups] = useState([]);
-  const [selectedGroupForInvite, setSelectedGroupForInvite] = useState('');
-  const [showGroupPicker, setShowGroupPicker] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState(
+    event.inviteGroupIds?.map(id => id.toString ? id.toString() : id)
+    || (event.inviteGroupId ? [event.inviteGroupId] : [])
+  );
   const [selectedImage, setSelectedImage] = useState(null);
+
+  const toggleGroupForInvite = (groupId) => {
+    setSelectedGroupIds(prev =>
+      prev.includes(groupId) ? prev.filter(id => id !== groupId) : [...prev, groupId]
+    );
+  };
 
  const [formData, setFormData] = useState({
    name: event.name || '',
@@ -211,7 +218,7 @@ export default function EditEventScreen({ route, navigation }) {
         ...formData,
         capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
         groupSize: formData.groupSize ? parseInt(formData.groupSize) : undefined,
-        inviteGroupId: selectedGroupForInvite || undefined, // Send group ID for auto-invites
+        inviteGroupIds: selectedGroupIds,
       });
 
       // Same as on create - a custom photo needs a real multipart upload,
@@ -553,58 +560,45 @@ export default function EditEventScreen({ route, navigation }) {
             </>
           )}
 
-          {/* Auto-invite existing group members - Only show for EVENTS */}
+          {/* Auto-invite existing groups - Only show for EVENTS */}
           {event.type === 'event' && (
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Auto-invite Group Members</Text>
+              <Text style={styles.label}>Auto-invite Groups</Text>
               <Text style={styles.helperText}>
-                Automatically send invites to members of one of your existing groups
+                Post a clickable invite card into one or more of your groups' chats
               </Text>
-              
-              <View style={styles.dropdownContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.dropdown,
-                    myGroups.length === 0 && styles.dropdownDisabled
-                  ]}
-                  disabled={myGroups.length === 0}
-                  onPress={() => setShowGroupPicker(true)}
-                >
-                  <Ionicons 
-                    name="people-outline" 
-                    size={20} 
-                    color={myGroups.length === 0 ? "#666666" : "#0078FF"} 
-                  />
-                  <Text style={[
-                    styles.dropdownText,
-                    myGroups.length === 0 && styles.dropdownTextDisabled
-                  ]}>
-                    {selectedGroupForInvite 
-                      ? myGroups.find(g => g._id === selectedGroupForInvite)?.name 
-                      : myGroups.length === 0 
-                        ? 'No groups available' 
-                        : 'Select a group...'
-                    }
-                  </Text>
-                  <Ionicons 
-                    name="chevron-down" 
-                    size={20} 
-                    color={myGroups.length === 0 ? "#666666" : "#999999"} 
-                  />
-                </TouchableOpacity>
-              </View>
-              
-              {myGroups.length === 0 && (
+
+              {myGroups.length === 0 ? (
                 <Text style={styles.disabledText}>
                   Create a group first to use auto-invites
                 </Text>
+              ) : (
+                <View style={styles.groupChecklist}>
+                  {myGroups.map(group => {
+                    const selected = selectedGroupIds.includes(group._id);
+                    return (
+                      <TouchableOpacity
+                        key={group._id}
+                        style={styles.groupChecklistRow}
+                        onPress={() => toggleGroupForInvite(group._id)}
+                      >
+                        <Ionicons
+                          name={selected ? 'checkbox' : 'square-outline'}
+                          size={22}
+                          color={selected ? '#0078FF' : '#666666'}
+                        />
+                        <Text style={styles.groupChecklistText}>{group.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               )}
-              
-              {selectedGroupForInvite && (
+
+              {selectedGroupIds.length > 0 && (
                 <View style={styles.selectedGroupInfo}>
                   <Ionicons name="checkmark-circle" size={16} color="#00B000" />
                   <Text style={styles.selectedGroupText}>
-                    Will auto-invite {myGroups.find(g => g._id === selectedGroupForInvite)?.participants?.length || 0} group members
+                    Group notifications will be added
                   </Text>
                 </View>
               )}
@@ -709,17 +703,6 @@ export default function EditEventScreen({ route, navigation }) {
           <View style={{ height: 50 }} />
         </View>
       </ScrollView>
-
-      <SelectModal
-        visible={showGroupPicker}
-        title="Choose a group to auto-invite members from:"
-        options={[
-          { label: 'None - No auto-invites', value: '' },
-          ...myGroups.map(g => ({ label: g.name, value: g._id }))
-        ]}
-        onSelect={setSelectedGroupForInvite}
-        onClose={() => setShowGroupPicker(false)}
-      />
 
       {/* Date Picker Modal - For Android */}
       {showDatePicker && Platform.OS === 'android' && (
@@ -1072,6 +1055,20 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  groupChecklist: {
+    marginTop: 8,
+    gap: 4,
+  },
+  groupChecklistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  groupChecklistText: {
+    fontSize: 15,
+    color: '#FFFFFF',
   },
   selectedGroupInfo: {
     flexDirection: 'row',
