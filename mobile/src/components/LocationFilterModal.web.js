@@ -5,6 +5,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+// Static import rather than dynamic import('leaflet') - this is a .web.js
+// file so it's never bundled for native regardless, and a static import
+// avoids depending on a separately-fetched chunk loading correctly
+// (relative chunk URLs can be finicky under Vercel's SPA rewrite rule).
+import L from 'leaflet';
 import api from '../services/api';
 
 const MIN_RADIUS_KM = 2;
@@ -26,7 +31,6 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
   const mapRef = useRef(null);
   const circleRef = useRef(null);
   const markerRef = useRef(null);
-  const leafletRef = useRef(null);
 
   const [center, setCenter] = useState(null); // { lat, lng }
   const [label, setLabel] = useState('');
@@ -61,55 +65,46 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
     if (!seed || !mapContainerRef.current) return;
 
     ensureLeafletCss();
-    let cancelled = false;
 
-    import('leaflet').then((L) => {
-      if (cancelled || !mapContainerRef.current) return;
-      leafletRef.current = L;
+    const map = L.map(mapContainerRef.current, {
+      center: [seed.lat, seed.lng],
+      zoom: 9,
+      zoomControl: true,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(map);
 
-      const map = L.map(mapContainerRef.current, {
-        center: [seed.lat, seed.lng],
-        zoom: 9,
-        zoomControl: true,
-      });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 18,
-      }).addTo(map);
+    const marker = L.marker([seed.lat, seed.lng]).addTo(map);
+    const circle = L.circle([seed.lat, seed.lng], {
+      radius: seedRadius * 1000,
+      color: '#0078FF',
+      fillColor: '#0078FF',
+      fillOpacity: 0.15,
+    }).addTo(map);
 
-      const marker = L.marker([seed.lat, seed.lng]).addTo(map);
-      const circle = L.circle([seed.lat, seed.lng], {
-        radius: seedRadius * 1000,
-        color: '#0078FF',
-        fillColor: '#0078FF',
-        fillOpacity: 0.15,
-      }).addTo(map);
-
-      map.on('click', (e) => {
-        const { lat, lng } = e.latlng;
-        setCenter({ lat, lng });
-        setLabel('');
-        marker.setLatLng([lat, lng]);
-        circle.setLatLng([lat, lng]);
-      });
-
-      mapRef.current = map;
-      markerRef.current = marker;
-      circleRef.current = circle;
-
-      // The container's final flex-computed size can land a frame after
-      // Leaflet reads it, especially right as the modal's slide-in
-      // animation starts - without this it sometimes initializes against
-      // a 0-height container and renders blank until the window resizes.
-      requestAnimationFrame(() => map.invalidateSize());
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      setCenter({ lat, lng });
+      setLabel('');
+      marker.setLatLng([lat, lng]);
+      circle.setLatLng([lat, lng]);
     });
 
+    mapRef.current = map;
+    markerRef.current = marker;
+    circleRef.current = circle;
+
+    // The container's final flex-computed size can land a frame after
+    // Leaflet reads it, especially right as the modal's slide-in
+    // animation starts - without this it sometimes initializes against
+    // a 0-height container and renders blank until the window resizes.
+    requestAnimationFrame(() => map.invalidateSize());
+
     return () => {
-      cancelled = true;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
+      map.remove();
+      mapRef.current = null;
     };
   }, [visible]);
 
