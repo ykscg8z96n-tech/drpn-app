@@ -444,7 +444,6 @@ export default function EditEventScreen({ route, navigation }) {
                           setFormData({ ...formData, eventDate: new Date(`${dateString}T00:00:00`) });
                         }
                       }}
-                      min={toDateOnlyString(new Date())}
                     />
                   ) : Platform.OS === 'ios' ? (
                     <DateTimePicker
