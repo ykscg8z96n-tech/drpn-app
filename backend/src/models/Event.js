@@ -34,6 +34,10 @@ const eventSchema = new mongoose.Schema({
       type: [Number], // [longitude, latitude]
       required: true
     },
+    // Full street address, only ever shown to the organizer (editing the
+    // event needs it to re-populate the address field). `address` is the
+    // "City, State" string shown publicly - kept separate on purpose.
+    fullAddress: String,
     address: String,
     city: String,
     state: String
