@@ -13,6 +13,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -95,7 +96,7 @@ const getEventDisplayImage = (item) => {
 };
 
 // Swipeable Event Item Component - KEEPING ORIGINAL IMPLEMENTATION
-const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrollEnabled, playHint, onHintPlayed }) => {
+const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvite, onScrollEnabled, playHint, onHintPlayed }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [isRevealed, setIsRevealed] = useState(false);
 
@@ -200,7 +201,17 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onScrol
               <Ionicons name="create-outline" size={24} color="white" />
               <Text style={styles.actionButtonText}>Edit</Text>
             </TouchableOpacity>
-            
+
+            {item.type === 'group' && (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => onInvite(item)}
+              >
+                <Ionicons name="person-add-outline" size={24} color="white" />
+                <Text style={styles.actionButtonText}>Invite</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.archiveButton}
               onPress={() => onArchive(item)}
@@ -442,6 +453,31 @@ export default function CreateEventScreen({ navigation }) {
     navigation.navigate('PendingApplications', { event });
   };
 
+  const handleInviteGroup = async (group) => {
+    try {
+      const response = await api.post(`/events/${group._id}/invite`);
+      const { inviteCode } = response.data.data;
+      Alert.alert(
+        'Invite Code',
+        `Share this code so people can join "${group.name}":\n\n${inviteCode}`,
+        [
+          {
+            text: 'Copy',
+            onPress: () => {
+              if (Platform.OS === 'web' && navigator.clipboard) {
+                navigator.clipboard.writeText(inviteCode);
+              }
+            }
+          },
+          { text: 'Close', style: 'cancel' }
+        ]
+      );
+    } catch (error) {
+      console.error('Error generating group invite code:', error);
+      Alert.alert('Error', 'Failed to generate invite code. Please try again.');
+    }
+  };
+
   const getFilteredEvents = () => {
     if (activeTab === 'Events') {
       return myEvents.filter(event => event.type === 'event');
@@ -559,6 +595,7 @@ export default function CreateEventScreen({ navigation }) {
                 onArchive={handleArchiveEvent}
                 onEdit={handleEditEvent}
                 onViewApplicants={handleViewApplicants}
+                onInvite={handleInviteGroup}
                 onScrollEnabled={handleScrollEnabled}
                 playHint={index === 0 && !swipeHintPlayed}
                 onHintPlayed={() => setSwipeHintPlayed(true)}
