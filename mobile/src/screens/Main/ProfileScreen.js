@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   TextInput,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -60,6 +61,10 @@ export default function ProfileScreen({ navigation }) {
   const [tempBirthday, setTempBirthday] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0); // New state for carousel
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -219,6 +224,30 @@ export default function ProfileScreen({ navigation }) {
       console.error('Error updating profile:', error);
       Alert.alert('Error', 'Failed to update profile');
       return false;
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      Alert.alert('Error', 'Please fill in both fields');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await api.put('/auth/change-password', { currentPassword, newPassword });
+      setShowChangePassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      Alert.alert('Success', 'Password changed!');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -512,6 +541,7 @@ export default function ProfileScreen({ navigation }) {
 };
 
   const renderEditProfile = () => (
+    <>
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {/* Photo Grid - First thing under tabs */}
       <View style={styles.section}>
@@ -721,12 +751,68 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={16} color="#666666" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.actionButton} onPress={() => setShowChangePassword(true)}>
+          <Ionicons name="lock-closed-outline" size={24} color="#666666" />
+          <Text style={styles.actionText}>Change Password</Text>
+          <Ionicons name="chevron-forward" size={16} color="#666666" />
+        </TouchableOpacity>
+
         <TouchableOpacity style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={24} color="#FF6B6B" />
           <Text style={[styles.actionText, styles.signOutText]}>Sign Out</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
+
+    <Modal visible={showChangePassword} transparent animationType="fade" onRequestClose={() => setShowChangePassword(false)}>
+      <View style={styles.passwordModalOverlay}>
+        <View style={styles.passwordModalSheet}>
+          <Text style={styles.passwordModalTitle}>Change Password</Text>
+
+          <TextInput
+            style={styles.passwordModalInput}
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            placeholder="Current password"
+            placeholderTextColor="#666666"
+            secureTextEntry
+          />
+          <TextInput
+            style={styles.passwordModalInput}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="New password (min. 6 characters)"
+            placeholderTextColor="#666666"
+            secureTextEntry
+          />
+
+          <View style={styles.passwordModalButtons}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => {
+                setShowChangePassword(false);
+                setCurrentPassword('');
+                setNewPassword('');
+              }}
+            >
+              <Text style={styles.editButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleChangePassword}
+              disabled={changingPassword}
+            >
+              {changingPassword ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 
   const renderPreview = () => {
@@ -1483,6 +1569,47 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#C7C4C4',
+    marginTop: 4,
+  },
+
+  // Change Password Modal
+  passwordModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  passwordModalSheet: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    padding: 20,
+  },
+  passwordModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  passwordModalInput: {
+    borderWidth: 1,
+    borderColor: '#333333',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  passwordModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
     marginTop: 4,
   },
 });
