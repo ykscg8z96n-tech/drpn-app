@@ -188,7 +188,11 @@ export default function SwipeScreen({ navigation }) {
       
       const response = await api.get('/events/nearby', { params });
       setEvents(response.data.data);
-      
+      // cardIndex from the previous (possibly filtered) list can point
+      // past the end of this new one - the swiper library has no bounds
+      // check for that and crashes hard on the next render.
+      setCardIndex(0);
+
     } catch (error) {
       console.error('Error fetching events:', error);
       Alert.alert('Error', 'Failed to fetch nearby events.');
@@ -584,7 +588,7 @@ export default function SwipeScreen({ navigation }) {
 
         <TouchableOpacity
           style={[styles.button, styles.passButton]}
-          onPress={() => swiperRef.current?.swipeLeft()}
+          onPress={() => events[cardIndex] && swiperRef.current?.swipeLeft()}
         >
           <Ionicons name="close" size={36} color="#E12112" />
         </TouchableOpacity>
@@ -598,7 +602,7 @@ export default function SwipeScreen({ navigation }) {
 
         <TouchableOpacity
           style={[styles.button, styles.likeButton]}
-          onPress={() => swiperRef.current?.swipeRight()}
+          onPress={() => events[cardIndex] && swiperRef.current?.swipeRight()}
         >
           <Ionicons name="heart" size={36} color="#00B000" />
         </TouchableOpacity>
