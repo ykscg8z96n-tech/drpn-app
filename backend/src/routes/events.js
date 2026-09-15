@@ -335,6 +335,10 @@ router.post('/', [protect,
       inviteGroupId: inviteGroup?._id || null,
       organizer: req.user.id,
       admins: [req.user.id],
+      // The organizer is themselves a member/attendee from the moment the
+      // event or group exists - without this, capacity displays as e.g.
+      // 0/50 until someone else is accepted, when it's really 1/50.
+      currentAttendees: 1,
       createdAt: new Date(),
       updatedAt: new Date()
     };

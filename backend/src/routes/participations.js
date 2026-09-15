@@ -69,11 +69,19 @@ router.get('/', protect, async (req, res) => {
       }
     }));
 
-    // Combine and sort all items
-    const allItems = [
-      ...participations,
-      ...transformedOrganizedEvents
-    ];
+    // Combine and dedupe by event ID - stale/duplicate Participation
+    // records (created before the unique event+participant index was in
+    // place) or a participation that happens to point at your own
+    // organized event would otherwise render the same event/group
+    // multiple times in a row.
+    const combined = [...participations, ...transformedOrganizedEvents];
+    const seenEventIds = new Set();
+    const allItems = combined.filter(item => {
+      const eventId = item.event?._id?.toString();
+      if (!eventId || seenEventIds.has(eventId)) return false;
+      seenEventIds.add(eventId);
+      return true;
+    });
 
     // Sort by last activity
     allItems.sort((a, b) => {
