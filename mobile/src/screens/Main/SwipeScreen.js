@@ -136,7 +136,7 @@ export default function SwipeScreen({ navigation }) {
       }).start();
     } else {
       // Start from underneath the nav menu
-      slideAnim.setValue(Platform.OS === 'ios' ? 223 : 185); // Height of drawer + nav menu
+      slideAnim.setValue(Platform.OS === 'ios' ? 238 : 200); // Height of drawer + nav menu
     }
   }, [showFilterDrawer]);
 
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     paddingTop: 12,
     paddingBottom: 12,
-    height: Platform.OS === 'ios' ? 190 : 165, // Three rows: type filter, categories, location
+    height: Platform.OS === 'ios' ? 205 : 180, // Three rows: type filter, categories, location
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 83 : 70, // Sit just above the nav menu
     left: 0,
