@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Message = require('../models/Message');
+const ChatCounter = require('../models/ChatCounter');
+const ChatMembership = require('../models/ChatMembership');
 const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const Event = require('../models/Event');
@@ -15,9 +17,19 @@ router.post('/', [protect,
   body('text').notEmpty().trim().isLength({ max: 1000 }).withMessage('Message text is required and must be under 1000 characters'),
   body('chatType').isIn(['event', 'group', 'private']).withMessage('Chat type must be event, group, or private'),
   body('eventId').optional().isMongoId().withMessage('Valid event ID required for event/group chats'),
-  body('privateConnectionId').optional().isMongoId().withMessage('Valid private connection ID required for private chats')
+  body('privateConnectionId').optional().isMongoId().withMessage('Valid private connection ID required for private chats'),
+  body('clientId').optional().isString()
 ], async (req, res) => {
   try {
+    // A retried send reuses the same clientId - return the message that
+    // already exists instead of creating a duplicate.
+    if (req.body.clientId) {
+      const existing = await Message.findOne({ clientId: req.body.clientId })
+        .populate('sender', 'name photos');
+      if (existing) {
+        return res.status(200).json({ success: true, data: existing, message: 'Message already sent' });
+      }
+    }
     console.log('💬 Send message request:', {
       chatType: req.body.chatType,
       eventId: req.body.eventId,
@@ -30,7 +42,7 @@ router.post('/', [protect,
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { text, chatType, eventId, privateConnectionId } = req.body;
+    const { text, chatType, eventId, privateConnectionId, clientId } = req.body;
     let message;
 
     if (chatType === 'event' || chatType === 'group') {
@@ -89,7 +101,8 @@ router.post('/', [protect,
         eventId,
         req.user.id,
         text,
-        event.type
+        event.type,
+        clientId
       );
 
       // Update participation chat tracking (only for participants)
@@ -136,6 +149,8 @@ router.post('/', [protect,
 
       console.log(`🏠 Sending to shared room: ${sharedRoomId}`);
 
+      const privateSeq = await ChatCounter.nextSeq(sharedRoomId);
+
       // Create private message with shared room ID
       message = await Message.create({
         chatType: 'private',
@@ -143,7 +158,9 @@ router.post('/', [protect,
         privateConnection: privateConnectionId,
         sender: req.user.id,
         text: text,
-        messageType: 'text'
+        messageType: 'text',
+        clientId,
+        seq: privateSeq
       });
 
       // Update connection chat tracking
@@ -168,6 +185,17 @@ router.post('/', [protect,
     });
 
   } catch (error) {
+    // Two concurrent retries with the same clientId can both pass the
+    // initial existence check and then race to insert - the unique
+    // index catches it here as a duplicate-key error. Treat that as
+    // success (the message did send) rather than a server error.
+    if (error.code === 11000 && error.keyPattern?.clientId) {
+      const existing = await Message.findOne({ clientId: req.body.clientId })
+        .populate('sender', 'name photos');
+      if (existing) {
+        return res.status(200).json({ success: true, data: existing, message: 'Message already sent' });
+      }
+    }
     console.error('❌ Error sending message:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -398,89 +426,13 @@ router.post('/read', [protect,
 
     const { chatType, chatId } = req.body;
 
-    // Mark messages as read
+    // Legacy per-message read tracking, kept for the older readBy-based
+    // reads elsewhere until they're migrated to the ChatMembership cursor.
     await Message.markChatAsRead(chatType, chatId, req.user.id);
 
-    // Update participation/connection unread count
-      if (chatType === 'event' || chatType === 'group') {
-      // Event/Group chat message
-      if (!eventId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Event ID required for event/group chats'
-        });
-      }
-
-      console.log(`📨 Sending ${chatType} message to event ${eventId}, user: ${req.user.id}`);
-
-      // Get the event to check access
-      const event = await Event.findById(eventId);
-      
-      if (!event) {
-        return res.status(404).json({
-          success: false,
-          message: 'Event not found'
-        });
-      }
-
-      // Check if user has access - either as participant OR organizer
-      let hasAccess = false;
-      let accessType = '';
-
-      // Check if user is organizer or admin
-      if (event.canUserManage(req.user.id)) {
-        hasAccess = true;
-        accessType = 'organizer';
-        console.log(`✅ User has organizer access to send message to: ${event.name}`);
-      } else {
-        // Check if user is a participant
-        const participation = await Participation.findOne({
-          event: eventId,
-          participant: req.user.id,
-          status: 'accepted',
-          isArchived: false
-        });
-
-        if (participation) {
-          hasAccess = true;
-          accessType = 'participant';
-          console.log(`✅ User has participant access to send message to: ${event.name}`);
-          
-          // Update participation chat tracking for participants
-          await participation.updateLastMessage();
-        }
-      }
-
-      if (!hasAccess) {
-        console.log(`❌ User ${req.user.id} cannot send message to event ${eventId}`);
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized - you must be a participant or organizer'
-        });
-      }
-
-      // Create event/group message
-      message = await Message.createEventMessage(
-        eventId,
-        req.user.id,
-        text,
-        event.type
-      );
-
-      console.log(`✅ ${chatType} message sent to ${event.name} by ${accessType}`);
-
-    } else if (chatType === 'private') {
-      const connectionId = chatId.replace('private-', '');
-      const connection = await PrivateConnection.findOne({
-        $or: [
-          { participant: req.user.id, _id: connectionId },
-          { otherUser: req.user.id, participant: { $ne: req.user.id } }
-        ]
-      });
-      if (connection) {
-        await connection.markChatRead();
-      }
-    }
+    // Advance this user's read cursor to the chat's current head.
+    const counter = await ChatCounter.findOne({ chatId });
+    await ChatMembership.markRead(req.user.id, chatType, chatId, counter?.lastSeq || 0);
 
     res.json({
       success: true,

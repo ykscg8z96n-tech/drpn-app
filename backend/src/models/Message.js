@@ -39,7 +39,39 @@ const messageSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  
+
+  // Client-minted UUID, set before the request is sent. Lets the sender
+  // match the server's broadcast echo back to its own optimistic bubble
+  // (so it renders once, not twice) and makes retries idempotent - a
+  // retried send reuses the same clientId, and the unique index below
+  // turns a duplicate insert into a harmless no-op instead of a second
+  // message. Sparse because older messages predate this field.
+  clientId: {
+    type: String,
+    index: { unique: true, sparse: true }
+  },
+
+  // Per-chat monotonic order, allocated from ChatCounter at send time.
+  // Timestamps alone aren't a safe sort/pagination key - two messages
+  // can land in the same millisecond.
+  seq: {
+    type: Number
+  },
+
+  // Not written by anything yet - reserved so a later reply-threading
+  // feature doesn't need a schema migration.
+  replyTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message',
+    default: null
+  },
+
+  // Not written by anything yet - reserved for media-in-chat.
+  attachments: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: []
+  },
+
   // Message content
   text: {
     type: String,
@@ -110,13 +142,11 @@ const messageSchema = new mongoose.Schema({
 
 // Indexes for efficient queries
 messageSchema.index({ chatType: 1, chatId: 1, timestamp: -1 });
+messageSchema.index({ chatType: 1, chatId: 1, seq: 1 });
 messageSchema.index({ chatType: 1, event: 1, timestamp: -1 });
 messageSchema.index({ chatType: 1, privateConnection: 1, timestamp: -1 });
 messageSchema.index({ sender: 1, timestamp: -1 });
 messageSchema.index({ 'readBy.user': 1 });
-
-// Legacy index for backward compatibility
-messageSchema.index({ match: 1, timestamp: -1 });
 
 // Virtual for getting chat room identifier
 messageSchema.virtual('roomId').get(function() {
@@ -154,26 +184,19 @@ messageSchema.methods.editMessage = function(newText) {
 };
 
 // Static method to create event/group chat message
-messageSchema.statics.createEventMessage = function(eventId, senderId, text, eventType = 'event') {
+messageSchema.statics.createEventMessage = async function(eventId, senderId, text, eventType = 'event', clientId = null) {
+  const ChatCounter = require('./ChatCounter');
+  const chatId = `${eventType}-${eventId}`;
+  const seq = await ChatCounter.nextSeq(chatId);
   return this.create({
     chatType: eventType, // 'event' or 'group'
-    chatId: `${eventType}-${eventId}`,
+    chatId,
     event: eventId,
     sender: senderId,
     text: text,
-    messageType: 'text'
-  });
-};
-
-// Static method to create private chat message
-messageSchema.statics.createPrivateMessage = function(privateConnectionId, senderId, text) {
-  return this.create({
-    chatType: 'private',
-    chatId: `private-${privateConnectionId}`,
-    privateConnection: privateConnectionId,
-    sender: senderId,
-    text: text,
-    messageType: 'text'
+    messageType: 'text',
+    clientId,
+    seq
   });
 };
 

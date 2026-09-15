@@ -64,6 +64,15 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+
+  // Expo push tokens, one per device this account is signed into. Used
+  // to notify a user of a new message when they have no live socket
+  // connection to receive it over (app backgrounded/closed).
+  pushTokens: [{
+    token: { type: String, required: true },
+    platform: { type: String, enum: ['ios', 'android', 'web'] },
+    updatedAt: { type: Date, default: Date.now }
+  }],
   isPremium: {
     type: Boolean,
     default: false
