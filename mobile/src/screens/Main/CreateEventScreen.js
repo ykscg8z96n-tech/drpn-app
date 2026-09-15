@@ -1067,6 +1067,8 @@ const styles = StyleSheet.create({
   detailModalContainer: {
     flex: 1,
     backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   detailCloseButton: {
     position: 'absolute',
