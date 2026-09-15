@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -136,11 +137,21 @@ export default function ProfileScreen({ navigation }) {
       
       try {
         const formData = new FormData();
-        formData.append('photos', {
-          uri: result.assets[0].uri,
-          type: 'image/jpeg',
-          name: 'profile_photo.jpg',
-        });
+        if (Platform.OS === 'web') {
+          // Browsers require an actual Blob/File on FormData - the
+          // {uri,type,name} object below is a React Native-only convention
+          // that silently stringifies to "[object Object]" on web, so no
+          // image bytes are ever sent.
+          const fetchResponse = await fetch(result.assets[0].uri);
+          const blob = await fetchResponse.blob();
+          formData.append('photos', blob, 'profile_photo.jpg');
+        } else {
+          formData.append('photos', {
+            uri: result.assets[0].uri,
+            type: 'image/jpeg',
+            name: 'profile_photo.jpg',
+          });
+        }
 
         const response = await api.post('/users/photos', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -540,16 +551,29 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color="#666666" />
             <View style={styles.inputContainer}>
-              <Text style={styles.fieldValue}>
-                {tempBirthday
-                  ? new Date(tempBirthday).toLocaleDateString()
-                  : profile?.birthDate
-                  ? new Date(profile.birthDate).toLocaleDateString()
-                  : 'Add birthday'}
-              </Text>
+              {editingBirthday ? (
+                <TextInput
+                  style={styles.fieldValue}
+                  value={tempBirthday}
+                  onChangeText={setTempBirthday}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#666666"
+                  autoFocus
+                />
+              ) : (
+                <Text style={styles.fieldValue}>
+                  {profile?.birthDate
+                    ? new Date(profile.birthDate).toLocaleDateString()
+                    : 'Add birthday'}
+                </Text>
+              )}
             </View>
 
-          {showDatePicker && (
+          {/* @react-native-community/datetimepicker has no web implementation
+              (no .web.js entry in the package - it silently does nothing when
+              rendered there), so web falls back to the plain text field above
+              instead of this native picker. */}
+          {Platform.OS !== 'web' && showDatePicker && (
             <DateTimePicker
               value={
                 tempBirthday
@@ -576,14 +600,25 @@ export default function ProfileScreen({ navigation }) {
             />
           )}
         </View>
-        
+
          <View style={styles.editButtonContainer}>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
+            {editingBirthday ? (
+              <>
+                <TouchableOpacity style={styles.editButton} onPress={cancelBirthdayEdit}>
+                  <Text style={styles.editButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
