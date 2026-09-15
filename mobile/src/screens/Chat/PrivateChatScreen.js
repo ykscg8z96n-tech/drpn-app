@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
+import ActionSheet from '../../components/ActionSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -36,6 +37,8 @@ export default function PrivateChatScreen({ route, navigation }) {
   const [chatRoomId, setChatRoomId] = useState(null);
   const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'accepting' | 'accepted' | 'declined'
   const [isBlocked, setIsBlocked] = useState(false);
+  const [showOptionsSheet, setShowOptionsSheet] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
 
   const reportReasons = [
     { label: 'Harassment', value: 'harassment' },
@@ -59,17 +62,6 @@ export default function PrivateChatScreen({ route, navigation }) {
     }
   };
 
-  const handleReport = () => {
-    Alert.alert(
-      'Report User',
-      'What\'s the issue?',
-      [
-        ...reportReasons.map(r => ({ text: r.label, onPress: () => submitReport(r.value) })),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
   const handleToggleBlock = async () => {
     try {
       if (isBlocked) {
@@ -86,17 +78,12 @@ export default function PrivateChatScreen({ route, navigation }) {
     }
   };
 
-  const handleOpenOptions = () => {
-    Alert.alert(
-      otherUserData?.name || 'Chat Options',
-      undefined,
-      [
-        { text: isBlocked ? 'Unblock User' : 'Block User', onPress: handleToggleBlock, style: isBlocked ? 'default' : 'destructive' },
-        { text: 'Report User', onPress: handleReport, style: 'destructive' },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
+  const optionsSheetOptions = [
+    { text: isBlocked ? 'Unblock User' : 'Block User', onPress: handleToggleBlock, destructive: !isBlocked },
+    { text: 'Report User', onPress: () => setShowReportSheet(true), destructive: true },
+  ];
+
+  const reportSheetOptions = reportReasons.map(r => ({ text: r.label, onPress: () => submitReport(r.value) }));
 
   const flatListRef = useRef(null);
 
@@ -243,7 +230,7 @@ export default function PrivateChatScreen({ route, navigation }) {
       headerRight: () => (
         <TouchableOpacity
           style={styles.headerOptionsButton}
-          onPress={handleOpenOptions}
+          onPress={() => setShowOptionsSheet(true)}
         >
           <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
         </TouchableOpacity>
@@ -633,6 +620,19 @@ export default function PrivateChatScreen({ route, navigation }) {
       />
       
       {renderInputArea()}
+
+      <ActionSheet
+        visible={showOptionsSheet}
+        title={otherUserData?.name}
+        options={optionsSheetOptions}
+        onClose={() => setShowOptionsSheet(false)}
+      />
+      <ActionSheet
+        visible={showReportSheet}
+        title="What's the issue?"
+        options={reportSheetOptions}
+        onClose={() => setShowReportSheet(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

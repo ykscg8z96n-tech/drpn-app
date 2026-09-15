@@ -191,7 +191,7 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: '#121212',
   },
   header: {
     paddingHorizontal: 24,
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: '#C7C4C4',
   },
   form: {
     paddingHorizontal: 24,
@@ -215,9 +215,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   input: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#2C2C2C',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#666161',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -225,23 +225,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: '#E12112',
   },
   errorText: {
-    color: '#EF4444',
+    color: '#E12112',
     fontSize: 14,
     marginTop: 4,
     marginLeft: 4,
   },
   button: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#0078FF',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#6B7280',
+    backgroundColor: '#666161',
   },
   buttonText: {
     color: '#FFFFFF',
@@ -260,23 +260,23 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: '#6B7280',
+    borderColor: '#666161',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+    backgroundColor: '#0078FF',
+    borderColor: '#0078FF',
   },
   termsText: {
     flex: 1,
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#C7C4C4',
     lineHeight: 20,
   },
   termsLink: {
-    color: '#3B82F6',
+    color: '#0078FF',
     textDecorationLine: 'underline',
   },
   loginContainer: {
@@ -287,11 +287,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: '#C7C4C4',
   },
   loginLink: {
     fontSize: 16,
-    color: '#3B82F6',
+    color: '#0078FF',
     fontWeight: '600',
   },
 });
