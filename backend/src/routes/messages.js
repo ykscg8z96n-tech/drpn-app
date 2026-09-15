@@ -417,9 +417,33 @@ router.get('/private/:connectionId', protect, async (req, res) => {
       console.log('⚠️ Connection update error (non-critical):', connectionError.message);
     }
 
-    const otherUser = connection.participant._id.toString() === req.user.id 
-      ? connection.otherUser 
+    const otherUser = connection.participant._id.toString() === req.user.id
+      ? connection.otherUser
       : connection.participant;
+
+    // An owner-invite card's accept/decline buttons need to reflect this
+    // viewer's actual status - computed here rather than trusted from
+    // the client, same as event_invite cards in GET /event/:eventId.
+    const ownerInviteMessages = messages.filter(m => m.systemMessage?.type === 'owner_invite');
+    if (ownerInviteMessages.length) {
+      const invitedEventIds = [...new Set(ownerInviteMessages.map(m => m.systemMessage.data.eventId?.toString()))];
+      const invitedEvents = await Event.find({ _id: { $in: invitedEventIds } })
+        .select('admins ownerInviteDeclinedBy');
+      const invitedEventsById = new Map(invitedEvents.map(e => [e._id.toString(), e]));
+
+      for (const message of ownerInviteMessages) {
+        const invitedEvent = invitedEventsById.get(message.systemMessage.data.eventId?.toString());
+        let viewerStatus = null;
+        if (invitedEvent) {
+          if (invitedEvent.admins.some(id => id.toString() === req.user.id)) {
+            viewerStatus = 'accepted';
+          } else if (invitedEvent.ownerInviteDeclinedBy.some(id => id.toString() === req.user.id)) {
+            viewerStatus = 'declined';
+          }
+        }
+        message.systemMessage.data.viewerStatus = viewerStatus;
+      }
+    }
 
     res.json({
       success: true,
