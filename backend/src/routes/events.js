@@ -701,9 +701,9 @@ router.post('/:id/decide', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id)
-      .populate('organizer', 'name photos')
-      .populate('applicants.userId', 'name photos');
-    
+      .populate('organizer', 'name photos bio age')
+      .populate('applicants.userId', 'name photos bio age');
+
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }

@@ -11,6 +11,7 @@ import {
   Image,
   ScrollView,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,13 +20,15 @@ import api from '../../services/api';
 const { width } = Dimensions.get('window');
 
 // User Item Component - Matching CreateEventScreen style
-const UserItem = ({ 
-  user, 
-  isPending = false, 
-  isOrganizer = false, 
-  onAccept, 
-  onReject, 
-  onStartChat 
+const UserItem = ({
+  user,
+  isPending = false,
+  isOrganizer = false,
+  isSelf = false,
+  onAccept,
+  onReject,
+  onStartChat,
+  onViewProfile,
 }) => {
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -37,7 +40,7 @@ const UserItem = ({
   };
 
   return (
-    <View style={styles.userItem}>
+    <TouchableOpacity style={styles.userItem} onPress={() => onViewProfile(user)} activeOpacity={0.7}>
       <View style={styles.userHeader}>
         {/* Left Section - Photo (same size as events) */}
         <View style={styles.leftSection}>
@@ -100,14 +103,16 @@ const UserItem = ({
                   </TouchableOpacity>
                 </View>
               ) : (
-                /* Show chat button for all accepted users (including self) */
-                <TouchableOpacity
-                  style={styles.chatButton}
-                  onPress={() => onStartChat(user)}
-                >
-                  <Ionicons name="chatbubble-outline" size={16} color="#007AFF" />
-                  <Text style={styles.chatButtonText}>Chat</Text>
-                </TouchableOpacity>
+                /* No point chatting with yourself - only show for others */
+                !isSelf && (
+                  <TouchableOpacity
+                    style={styles.chatButton}
+                    onPress={() => onStartChat(user)}
+                  >
+                    <Ionicons name="chatbubble-outline" size={16} color="#007AFF" />
+                    <Text style={styles.chatButtonText}>Chat</Text>
+                  </TouchableOpacity>
+                )
               )}
             </View>
           </View>
@@ -130,7 +135,7 @@ const UserItem = ({
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -141,7 +146,10 @@ export default function PendingApplicationsScreen({ route, navigation }) {
   const [acceptedUsers, setAcceptedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [viewingProfile, setViewingProfile] = useState(null);
+
+  const handleViewProfile = (userData) => setViewingProfile(userData);
+
   // Check if current user is organizer of this event
   const isOrganizer = event.organizer === user?.id || 
                      event.organizer?._id === user?.id ||
@@ -388,8 +396,10 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 user={userData}
                 isPending={true}
                 isOrganizer={isOrganizer}
+                isSelf={userData._id === user?.id}
                 onAccept={handleAcceptUser}
                 onReject={handleRejectUser}
+                onViewProfile={handleViewProfile}
               />
             ))}
             
@@ -406,7 +416,9 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 user={userData}
                 isPending={false}
                 isOrganizer={isOrganizer}
+                isSelf={userData._id === user?.id}
                 onStartChat={handleStartChat}
+                onViewProfile={handleViewProfile}
               />
             ))
           ) : (
@@ -420,6 +432,51 @@ export default function PendingApplicationsScreen({ route, navigation }) {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!viewingProfile}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setViewingProfile(null)}
+      >
+        <TouchableOpacity
+          style={styles.profileModalOverlay}
+          activeOpacity={1}
+          onPress={() => setViewingProfile(null)}
+        >
+          <TouchableOpacity style={styles.profileModalSheet} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            {viewingProfile?.photos && viewingProfile.photos.length > 0 ? (
+              <Image
+                source={{ uri: viewingProfile.photos[0].url || viewingProfile.photos[0] }}
+                style={styles.profileModalPhoto}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.profileModalPhotoPlaceholder}>
+                <Text style={styles.profileModalInitials}>
+                  {(viewingProfile?.name || '?').split(' ').map(n => n[0]).join('').toUpperCase()}
+                </Text>
+              </View>
+            )}
+
+            <ScrollView style={styles.profileModalInfo}>
+              <Text style={styles.profileModalName}>{viewingProfile?.name}</Text>
+              {viewingProfile?.age && (
+                <Text style={styles.profileModalAge}>Age {viewingProfile.age}</Text>
+              )}
+              {viewingProfile?.bio ? (
+                <Text style={styles.profileModalBio}>{viewingProfile.bio}</Text>
+              ) : (
+                <Text style={styles.profileModalBioEmpty}>No bio yet</Text>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.profileModalClose} onPress={() => setViewingProfile(null)}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -674,5 +731,70 @@ const styles = StyleSheet.create({
     color: '#999999',
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Profile view modal
+  profileModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  profileModalSheet: {
+    maxHeight: '85%',
+    backgroundColor: '#111111',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  profileModalPhoto: {
+    width: '100%',
+    height: 280,
+  },
+  profileModalPhotoPlaceholder: {
+    width: '100%',
+    height: 280,
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileModalInitials: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: '#666666',
+  },
+  profileModalInfo: {
+    padding: 20,
+  },
+  profileModalName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  profileModalAge: {
+    fontSize: 16,
+    color: '#999999',
+    marginBottom: 12,
+  },
+  profileModalBio: {
+    fontSize: 16,
+    color: '#CCCCCC',
+    lineHeight: 22,
+  },
+  profileModalBioEmpty: {
+    fontSize: 16,
+    color: '#666666',
+    fontStyle: 'italic',
+  },
+  profileModalClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
