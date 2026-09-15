@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
+import SelectModal from '../../components/SelectModal';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,6 +51,7 @@ export default function CreateNewScreen({ route, navigation }) {
 
   const [myGroups, setMyGroups] = useState([]);
   const [selectedGroupForInvite, setSelectedGroupForInvite] = useState('');
+  const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
  const [formData, setFormData] = useState({
@@ -547,27 +549,7 @@ export default function CreateNewScreen({ route, navigation }) {
                     myGroups.length === 0 && styles.dropdownDisabled
                   ]}
                   disabled={myGroups.length === 0}
-                  onPress={() => {
-                    // Simple implementation - could be enhanced with proper dropdown
-                    if (myGroups.length > 0) {
-                      const groupNames = myGroups.map(g => g.name);
-                      groupNames.unshift('None - No auto-invites');
-                      
-                      Alert.alert(
-                        'Select Group',
-                        'Choose a group to auto-invite members from:',
-                        [
-                          ...groupNames.map((name, index) => ({
-                            text: name,
-                            onPress: () => {
-                              setSelectedGroupForInvite(index === 0 ? '' : myGroups[index - 1]._id);
-                            }
-                          })),
-                          { text: 'Cancel', style: 'cancel' }
-                        ]
-                      );
-                    }
-                  }}
+                  onPress={() => setShowGroupPicker(true)}
                 >
                   <Ionicons 
                     name="people-outline" 
@@ -708,6 +690,17 @@ export default function CreateNewScreen({ route, navigation }) {
           <View style={{ height: 50 }} />
         </View>
       </ScrollView>
+
+      <SelectModal
+        visible={showGroupPicker}
+        title="Choose a group to auto-invite members from:"
+        options={[
+          { label: 'None - No auto-invites', value: '' },
+          ...myGroups.map(g => ({ label: g.name, value: g._id }))
+        ]}
+        onSelect={setSelectedGroupForInvite}
+        onClose={() => setShowGroupPicker(false)}
+      />
 
       {/* Date Picker Modal - For Android */}
       {showDatePicker && Platform.OS === 'android' && (
