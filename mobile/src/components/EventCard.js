@@ -1,5 +1,5 @@
 // mobile/src/components/EventCard.js - FIXED ORGANIZER PHOTO FUNCTIONS
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 // Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins
 const CARD_HEIGHT = height - 265;
+const DETAILS_PANEL_HEIGHT = CARD_HEIGHT * 0.62;
 
 // Stock images for each category - same as CreateNewScreen.js
 const STOCK_IMAGES = {
@@ -67,10 +69,31 @@ const CategoryBadge = ({ category, size = 'medium' }) => {
   );
 };
 
+// Small pill distinguishing an event from a group - the card otherwise
+// only implies this through wording buried in the details.
+const TypeBadge = ({ type }) => (
+  <View style={[styles.typeBadge, type === 'group' ? styles.typeBadgeGroup : styles.typeBadgeEvent]}>
+    <Ionicons name={type === 'group' ? 'people' : 'calendar'} size={12} color="white" />
+    <Text style={styles.typeBadgeText}>{type === 'group' ? 'Group' : 'Event'}</Text>
+  </View>
+);
+
 export default function EventCard({ event, distance, onImagePress }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleExpanded = () => {
+    const next = !expanded;
+    setExpanded(next);
+    Animated.timing(slideAnim, {
+      toValue: next ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  };
 
   // ✅ FIXED: Organizer profile navigation functions moved to correct scope
   const nextOrganizerPhoto = () => {
@@ -295,9 +318,10 @@ export default function EventCard({ event, distance, onImagePress }) {
           </View>
         )}
 
-        {/* Category Badge */}
+        {/* Category + Type Badges */}
         <View style={styles.categoryContainer}>
           <CategoryBadge category={event.category} size="small" />
+          <TypeBadge type={event.type} />
         </View>
 
         {/* Distance Badge */}
@@ -311,46 +335,17 @@ export default function EventCard({ event, distance, onImagePress }) {
         )}
       </TouchableOpacity>
 
-      {/* Content */}
+      {/* Content - kept short on purpose; the rest lives in the
+          expandable details panel below so it never gets clipped */}
       <View style={styles.content}>
-        {/* Event Title */}
         <Text style={styles.eventTitle} numberOfLines={2}>
           {event.name}
         </Text>
 
-        {/* Event Description */}
-        <Text style={styles.eventDescription} numberOfLines={3}>
-          {event.description}
-        </Text>
-
-        {/* Organizer Info */}
-        <View style={styles.organizerContainer}>
-          <View style={styles.organizerInfo}>
-            {event.organizer?.photos && event.organizer.photos.length > 0 && event.organizer.photos[0] ? (
-              <Image 
-                source={{ uri: event.organizer.photos[0].url }} 
-                style={styles.organizerPhoto} 
-              />
-            ) : (
-              <View style={styles.organizerPhotoPlaceholder}>
-                <Text style={styles.organizerInitial}>
-                  {(event.organizer?.name || 'U').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <TouchableOpacity onPress={() => setShowOrganizerProfile(true)}>
-              <Text style={styles.organizerName}>
-                by {event.organizer?.name || 'Unknown'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Event Info Row */}
         <View style={styles.infoRow}>
           <View style={styles.infoItem}>
             <Ionicons name="calendar-outline" size={16} color="#C7C4C4" />
-            <Text style={styles.infoText}>{formatEventDate()}</Text>
+            <Text style={styles.infoText} numberOfLines={1}>{formatEventDate()}</Text>
           </View>
           <View style={styles.infoItem}>
             <Ionicons name="people-outline" size={16} color="#C7C4C4" />
@@ -358,17 +353,68 @@ export default function EventCard({ event, distance, onImagePress }) {
           </View>
         </View>
 
-        {/* Location */}
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={16} color="#C7C4C4" />
-          <Text style={styles.locationText} numberOfLines={2}>
-            {event.location?.city && event.location?.state 
+          <Text style={styles.locationText} numberOfLines={1}>
+            {event.location?.city && event.location?.state
               ? `${event.location.city}, ${event.location.state}`
               : event.location?.address || 'Location TBD'
             }
           </Text>
         </View>
       </View>
+
+      {/* Expand handle - reveals the full details panel below */}
+      <TouchableOpacity style={styles.expandHandle} onPress={toggleExpanded} activeOpacity={0.8}>
+        <Ionicons name={expanded ? 'chevron-down' : 'chevron-up'} size={20} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Details panel - slides up over the card; semi-transparent so the
+          image behind stays partly visible, and scrollable since a long
+          description plus everything else can outgrow the card. */}
+      <Animated.View
+        style={[
+          styles.detailsPanel,
+          {
+            height: slideAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, DETAILS_PANEL_HEIGHT],
+            }),
+          },
+        ]}
+        pointerEvents={expanded ? 'auto' : 'none'}
+      >
+        <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
+          <Text style={styles.detailsDescription}>{event.description}</Text>
+
+          <TouchableOpacity style={styles.organizerContainer} onPress={() => setShowOrganizerProfile(true)}>
+            <View style={styles.organizerInfo}>
+              {event.organizer?.photos && event.organizer.photos.length > 0 && event.organizer.photos[0] ? (
+                <Image
+                  source={{ uri: event.organizer.photos[0].url }}
+                  style={styles.organizerPhoto}
+                />
+              ) : (
+                <View style={styles.organizerPhotoPlaceholder}>
+                  <Text style={styles.organizerInitial}>
+                    {(event.organizer?.name || 'U').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.organizerName}>
+                by {event.organizer?.name || 'Unknown'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={16} color="#C7C4C4" />
+            <Text style={styles.locationText}>
+              {event.location?.address || event.location?.city || 'Location TBD'}
+            </Text>
+          </View>
+        </ScrollView>
+      </Animated.View>
 
       {/* Render organizer profile modal */}
       {renderOrganizerProfile()}
@@ -427,6 +473,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 16,
+    flexDirection: 'row',
+    gap: 6,
   },
   distanceContainer: {
     position: 'absolute',
@@ -680,5 +728,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E8E93',
     fontWeight: '500',
+  },
+
+  // Type Badge (Event vs Group)
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 3,
+  },
+  typeBadgeEvent: {
+    backgroundColor: 'rgba(0, 120, 255, 0.85)',
+  },
+  typeBadgeGroup: {
+    backgroundColor: 'rgba(155, 89, 182, 0.85)',
+  },
+  typeBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  // Expand handle + details panel
+  expandHandle: {
+    position: 'absolute',
+    bottom: 4,
+    left: '50%',
+    marginLeft: -18,
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  detailsPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(10, 10, 10, 0.92)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  detailsScroll: {
+    flex: 1,
+    padding: 20,
+  },
+  detailsDescription: {
+    fontSize: 16,
+    color: '#E5E5E5',
+    lineHeight: 22,
+    marginBottom: 16,
   },
 });

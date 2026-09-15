@@ -13,6 +13,7 @@ export const useFilter = () => {
 
 export const FilterProvider = ({ children }) => {
   const [selectedFilter, setSelectedFilter] = useState(null);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState(null); // null | 'event' | 'group'
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
 
   const openFilterDrawer = () => {
@@ -33,13 +34,19 @@ export const FilterProvider = ({ children }) => {
     closeFilterDrawer();
   };
 
+  const selectTypeFilter = (type) => {
+    setSelectedTypeFilter(type);
+  };
+
   const value = {
     selectedFilter,
+    selectedTypeFilter,
     showFilterDrawer,
     openFilterDrawer,
     closeFilterDrawer,
     selectFilter,
     clearFilter,
+    selectTypeFilter,
   };
 
   return (
