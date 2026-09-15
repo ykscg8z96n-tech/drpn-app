@@ -585,4 +585,23 @@ router.delete('/block/:userId', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/:id
+// @desc    Get another user's public profile (e.g. tapping a name/avatar
+//          in a chat). Registered last so it doesn't shadow the specific
+//          GET routes above (my-applications, swipe-history, etc).
+// @access  Private
+router.get('/:id', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('name photos bio birthDate isOrganizer');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -13,12 +13,14 @@ import {
   Platform,
   Image,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
+import ProfilePreviewCard from '../../components/ProfilePreviewCard';
 
 const { width } = Dimensions.get('window');
 
@@ -33,9 +35,54 @@ export default function ChatScreen({ route, navigation }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [eventData, setEventData] = useState(null);
+  const [viewingProfile, setViewingProfile] = useState(null);
+  const [startingChat, setStartingChat] = useState(false);
 
   const flatListRef = useRef(null);
   const finalChatId = chatId || eventId;
+
+  const handleViewProfile = async (senderId) => {
+    if (!senderId || senderId === user?.id) return;
+    try {
+      const response = await api.get(`/users/${senderId}`);
+      if (response.data.success) {
+        setViewingProfile(response.data.data);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load profile');
+    }
+  };
+
+  // Starts a private chat with whoever's profile is open, straight from
+  // the roster they're already on - no separate request/accept step.
+  const handleMessagePrivately = async () => {
+    if (!viewingProfile || startingChat) return;
+    setStartingChat(true);
+    try {
+      const response = await api.post('/private-connections/invite', {
+        toUserId: viewingProfile._id,
+        originEventId: finalChatId,
+        message: `Hi ${viewingProfile.name}!`
+      });
+      if (response.data.success) {
+        setViewingProfile(null);
+        // ChatScreen (this screen) and PrivateChat both live in the same
+        // Chats-tab stack (see MatchesStack in MainNavigator.js), so a
+        // direct navigate reaches it - no need to cross tabs like
+        // PendingApplicationsScreen (which lives in the Home tab's stack).
+        navigation.navigate('PrivateChat', {
+          connectionId: response.data.data._id,
+          otherUser: { name: viewingProfile.name, image: viewingProfile.photos?.[0]?.url || viewingProfile.photos?.[0] }
+        });
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to start chat');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to start private chat');
+    } finally {
+      setStartingChat(false);
+    }
+  };
 
   // Load event data and messages
   const loadMessages = useCallback(async (showLoadingSpinner = true) => {
@@ -283,7 +330,7 @@ export default function ChatScreen({ route, navigation }) {
           isOwn ? styles.ownMessageContainer : styles.otherMessageContainer
         ]}>
           {!isOwn && (
-            <View style={styles.avatarContainer}>
+            <TouchableOpacity style={styles.avatarContainer} onPress={() => handleViewProfile(item.sender?._id)}>
               {item.sender?.photos && item.sender.photos.length > 0 ? (
                 <Image
                   source={{ uri: item.sender.photos[0].url || item.sender.photos[0] }}
@@ -294,12 +341,12 @@ export default function ChatScreen({ route, navigation }) {
                   <Text style={styles.messageAvatarText}>{getInitials(senderName)}</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           )}
 
           <View style={{ maxWidth: width * 0.75 }}>
             {showSenderName && (
-              <View style={styles.senderRow}>
+              <TouchableOpacity style={styles.senderRow} onPress={() => handleViewProfile(item.sender?._id)}>
                 <Text style={[styles.senderName, isOrganizerMessage && styles.organizerName]}>
                   {senderName}
                 </Text>
@@ -308,7 +355,7 @@ export default function ChatScreen({ route, navigation }) {
                     <Ionicons name="star" size={10} color="#FFD700" />
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             )}
 
             <View style={[
@@ -411,6 +458,35 @@ export default function ChatScreen({ route, navigation }) {
       />
 
       {renderInputArea()}
+
+      <Modal
+        visible={!!viewingProfile}
+        animationType="slide"
+        onRequestClose={() => setViewingProfile(null)}
+      >
+        <View style={styles.profileModalContainer}>
+          <TouchableOpacity style={styles.profileCloseButton} onPress={() => setViewingProfile(null)}>
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          {viewingProfile && <ProfilePreviewCard profile={viewingProfile} />}
+          {viewingProfile && (
+            <TouchableOpacity
+              style={styles.messagePrivatelyButton}
+              onPress={handleMessagePrivately}
+              disabled={startingChat}
+            >
+              {startingChat ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <>
+                  <Ionicons name="chatbubble" size={18} color="white" />
+                  <Text style={styles.messagePrivatelyText}>Message Privately</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -649,5 +725,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999999',
     textAlign: 'center',
+  },
+
+  // Profile Preview Modal
+  profileModalContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  profileCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 6,
+  },
+  messagePrivatelyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0078FF',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    paddingVertical: 14,
+    borderRadius: 25,
+    gap: 8,
+  },
+  messagePrivatelyText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

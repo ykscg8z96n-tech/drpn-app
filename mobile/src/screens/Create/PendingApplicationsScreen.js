@@ -320,9 +320,17 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 });
 
                 if (response.data.success) {
-                  navigation.navigate('PrivateChat', {
-                    connectionId: response.data.data._id,
-                    otherUser: { name: userData.name, image: userData.photos?.[0]?.url || userData.photos?.[0] }
+                  // This screen lives in the Home tab's own stack -
+                  // PrivateChat is a screen in the Chats tab's stack, so a
+                  // plain navigate('PrivateChat') can't find it. Navigating
+                  // to the tab by name with a nested screen/params is how
+                  // React Navigation crosses between sibling tab stacks.
+                  navigation.navigate('Chats', {
+                    screen: 'PrivateChat',
+                    params: {
+                      connectionId: response.data.data._id,
+                      otherUser: { name: userData.name, image: userData.photos?.[0]?.url || userData.photos?.[0] }
+                    }
                   });
                 } else {
                   Alert.alert('Error', response.data.message || 'Failed to start chat');
