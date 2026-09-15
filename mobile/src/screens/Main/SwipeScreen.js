@@ -45,13 +45,15 @@ export default function SwipeScreen({ navigation }) {
   const swiperRef = useRef(null);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { 
-    selectedFilter, 
-    showFilterDrawer, 
-    openFilterDrawer, 
-    closeFilterDrawer, 
-    selectFilter, 
-    clearFilter 
+  const {
+    selectedFilter,
+    selectedTypeFilter,
+    showFilterDrawer,
+    openFilterDrawer,
+    closeFilterDrawer,
+    selectFilter,
+    clearFilter,
+    selectTypeFilter,
   } = useFilter();
   const slideAnim = useRef(new Animated.Value(200)).current;
   const swipeHintX = useRef(new Animated.Value(0)).current;
@@ -74,7 +76,7 @@ export default function SwipeScreen({ navigation }) {
     if (userLocation && user) {
       fetchNearbyEvents();
     }
-  }, [userLocation, user, selectedFilter]);
+  }, [userLocation, user, selectedFilter, selectedTypeFilter]);
 
   // Play a one-time "these are swipeable / this is filterable" hint once
   // the first batch of cards has loaded.
@@ -177,7 +179,10 @@ export default function SwipeScreen({ navigation }) {
       if (selectedFilter) {
         params.category = selectedFilter;
       }
-      
+      if (selectedTypeFilter) {
+        params.type = selectedTypeFilter;
+      }
+
       console.log('🔍 Fetching events with location:', params);
       
       const response = await api.get('/events/nearby', { params });
@@ -360,21 +365,48 @@ export default function SwipeScreen({ navigation }) {
 
                 <View style={styles.divider} />
 
+                {/* Event vs Group */}
+                <View style={styles.typeFilterRow}>
+                  {[
+                    { id: null, label: 'All' },
+                    { id: 'event', label: 'Events' },
+                    { id: 'group', label: 'Groups' },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[
+                        styles.typeFilterButton,
+                        selectedTypeFilter === opt.id && styles.typeFilterButtonActive
+                      ]}
+                      onPress={() => selectTypeFilter(opt.id)}
+                    >
+                      <Text style={[
+                        styles.typeFilterButtonText,
+                        selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
+                      ]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={styles.divider} />
+
                 {/* Categories */}
-                <ScrollView 
-                  horizontal 
+                <ScrollView
+                  horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.categoriesContainer}
                   contentContainerStyle={{ alignItems: 'center' }}
                 >
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.categoryItem}
                     onPress={handleClearFilter}
                   >
-                    <Ionicons 
-                      name="grid-outline" 
-                      size={20} 
-                      color={!selectedFilter ? '#0078FF' : '#FFFFFF'} 
+                    <Ionicons
+                      name="grid-outline"
+                      size={20}
+                      color={!selectedFilter ? '#0078FF' : '#FFFFFF'}
                     />
                     <Text style={[
                       styles.categoryText,
@@ -389,7 +421,7 @@ export default function SwipeScreen({ navigation }) {
                       key={category.id}
                       style={[
                         styles.categoryItem,
-                        selectedFilter === category.id && { 
+                        selectedFilter === category.id && {
                           backgroundColor: 'rgba(255, 255, 255, 0.1)',
                           borderRadius: 8,
                           paddingHorizontal: 8,
@@ -397,14 +429,14 @@ export default function SwipeScreen({ navigation }) {
                       ]}
                       onPress={() => handleFilterSelect(category.id)}
                     >
-                      <Ionicons 
-                        name={category.icon} 
-                        size={20} 
+                      <Ionicons
+                        name={category.icon}
+                        size={20}
                         color={category.color}  // Always use category color
                       />
                       <Text style={[
                         styles.categoryText,
-                        { 
+                        {
                           color: selectedFilter === category.id ? category.color : '#FFFFFF',
                           fontWeight: selectedFilter === category.id ? '600' : '500'
                         }
@@ -619,14 +651,41 @@ export default function SwipeScreen({ navigation }) {
 
               <View style={styles.divider} />
 
+              {/* Event vs Group */}
+              <View style={styles.typeFilterRow}>
+                {[
+                  { id: null, label: 'All' },
+                  { id: 'event', label: 'Events' },
+                  { id: 'group', label: 'Groups' },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.label}
+                    style={[
+                      styles.typeFilterButton,
+                      selectedTypeFilter === opt.id && styles.typeFilterButtonActive
+                    ]}
+                    onPress={() => selectTypeFilter(opt.id)}
+                  >
+                    <Text style={[
+                      styles.typeFilterButtonText,
+                      selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
+                    ]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.divider} />
+
               {/* Categories */}
-              <ScrollView 
-                horizontal 
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.categoriesContainer}
                 contentContainerStyle={{ alignItems: 'center' }}
               >
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.categoryItem}
                   onPress={handleClearFilter}
                 >
@@ -877,6 +936,29 @@ const styles = StyleSheet.create({
   categoriesContainer: {
     // Remove alignItems from here as it's now in contentContainerStyle
     paddingRight: 20,
+  },
+  typeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 20,
+  },
+  typeFilterButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+  },
+  typeFilterButtonActive: {
+    backgroundColor: '#0078FF',
+  },
+  typeFilterButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  typeFilterButtonTextActive: {
+    fontWeight: '700',
   },
   categoryItem: {
     alignItems: 'center',
