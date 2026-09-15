@@ -140,6 +140,28 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your profile, photos, and connections. Events/groups you solely organize will be handed to another owner or archived. This can\'t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/users/me');
+              signOut();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to delete account');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const addPhoto = async () => {
   try {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -760,6 +782,11 @@ export default function ProfileScreen({ navigation }) {
         <TouchableOpacity style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={24} color="#FF6B6B" />
           <Text style={[styles.actionText, styles.signOutText]}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionButton} onPress={handleDeleteAccount}>
+          <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+          <Text style={[styles.actionText, styles.signOutText]}>Delete Account</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
