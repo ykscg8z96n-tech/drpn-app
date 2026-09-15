@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const ChatCounter = require('../models/ChatCounter');
-const ChatMembership = require('../models/ChatMembership');
 const Participation = require('../models/Participation');
 const { hasChatAccess, checkEventAccess, checkPrivateAccess } = require('./chatAccess');
 
@@ -184,10 +183,10 @@ const handleConnection = (io) => {
       }
     });
 
-    socket.on('message:read', async ({ chatType, chatId, seq } = {}) => {
+    socket.on('message:read', async ({ chatType, chatId } = {}) => {
       try {
-        if (!chatType || !chatId || typeof seq !== 'number') return;
-        await ChatMembership.markRead(socket.userId, chatType, chatId, seq);
+        if (!chatType || !chatId) return;
+        await Message.markChatAsRead(chatType, chatId, socket.userId);
       } catch (error) {
         console.error('message:read error:', error);
       }

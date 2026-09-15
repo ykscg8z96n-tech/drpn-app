@@ -88,10 +88,6 @@ const participationSchema = new mongoose.Schema({
     },
     joinedChatAt: Date,
     lastReadAt: Date,
-    unreadCount: {
-      type: Number,
-      default: 0
-    },
     isMuted: {
       type: Boolean,
       default: false
@@ -135,7 +131,6 @@ participationSchema.index({ event: 1, participant: 1 }, { unique: true }); // On
 participationSchema.index({ event: 1, status: 1 });
 participationSchema.index({ participant: 1, status: 1 });
 participationSchema.index({ event: 1, 'chatParticipation.hasJoinedChat': 1 });
-participationSchema.index({ 'chatParticipation.unreadCount': 1 });
 participationSchema.index({ 'chatParticipation.lastMessageAt': 1 });
 participationSchema.index({ isArchived: 1, status: 1 });
 
@@ -181,19 +176,6 @@ participationSchema.methods.completeEvent = function() {
 participationSchema.methods.joinChat = function() {
   this.chatParticipation.hasJoinedChat = true;
   this.chatParticipation.joinedChatAt = new Date();
-  return this.save();
-};
-
-// Method to update unread count
-participationSchema.methods.updateUnreadCount = function(count) {
-  this.chatParticipation.unreadCount = Math.max(0, count);
-  return this.save();
-};
-
-// Method to mark chat as read
-participationSchema.methods.markChatRead = function() {
-  this.chatParticipation.lastReadAt = new Date();
-  this.chatParticipation.unreadCount = 0;
   return this.save();
 };
 

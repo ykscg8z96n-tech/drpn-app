@@ -65,10 +65,6 @@ const privateConnectionSchema = new mongoose.Schema({
     },
     joinedChatAt: Date,
     lastReadAt: Date,
-    unreadCount: {
-      type: Number,
-      default: 0
-    },
     isMuted: {
       type: Boolean,
       default: false
@@ -108,7 +104,6 @@ const privateConnectionSchema = new mongoose.Schema({
 privateConnectionSchema.index({ participant: 1, otherUser: 1 }, { unique: true }); // One connection per pair per direction
 privateConnectionSchema.index({ participant: 1, status: 1 });
 privateConnectionSchema.index({ participant: 1, 'chatParticipation.lastMessageAt': 1 });
-privateConnectionSchema.index({ 'chatParticipation.unreadCount': 1 });
 privateConnectionSchema.index({ 'invite.expiresAt': 1 });
 privateConnectionSchema.index({ originEvent: 1 });
 privateConnectionSchema.index({ isArchived: 1, status: 1 });
@@ -147,19 +142,6 @@ privateConnectionSchema.methods.acceptInvite = function() {
 privateConnectionSchema.methods.joinChat = function() {
   this.chatParticipation.hasJoinedChat = true;
   this.chatParticipation.joinedChatAt = new Date();
-  return this.save();
-};
-
-// Method to update unread count
-privateConnectionSchema.methods.updateUnreadCount = function(count) {
-  this.chatParticipation.unreadCount = Math.max(0, count);
-  return this.save();
-};
-
-// Method to mark chat as read
-privateConnectionSchema.methods.markChatRead = function() {
-  this.chatParticipation.lastReadAt = new Date();
-  this.chatParticipation.unreadCount = 0;
   return this.save();
 };
 

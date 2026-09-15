@@ -153,9 +153,8 @@ router.get('/', protect, async (req, res) => {
     // participant/otherUser field they were originally stored in.
     const connections = await PrivateConnection.getUserConnections(req.user.id, status);
 
-    // chatParticipation.unreadCount is never actually incremented when a
-    // message arrives - compute the real count from Message's own readBy
-    // tracking instead (mirrors the same fix in routes/participations.js).
+    // Unread counts come from Message's own readBy tracking - the one
+    // canonical mechanism (mirrors routes/participations.js).
     const connectionsWithUnread = await Promise.all(connections.map(async (connection) => {
       const uids = [req.user.id, connection.otherUser._id.toString()].sort();
       const chatId = `private-${uids[0]}-${uids[1]}`;
