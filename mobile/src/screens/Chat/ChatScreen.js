@@ -1,4 +1,4 @@
-// mobile/src/screens/Main/ChatScreen.js - YouTube Style with Discord Features
+// mobile/src/screens/Main/ChatScreen.js - iPhone Messages style, for event/group chats
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -33,10 +33,7 @@ export default function ChatScreen({ route, navigation }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [eventData, setEventData] = useState(null);
-  const [lastReadMessageId, setLastReadMessageId] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showUnreadBanner, setShowUnreadBanner] = useState(false);
-  
+
   const flatListRef = useRef(null);
   const finalChatId = chatId || eventId;
 
@@ -54,76 +51,43 @@ export default function ChatScreen({ route, navigation }) {
       }
       setError(null);
 
-      console.log('🔍 Loading chat data for:', {
-        chatId: finalChatId,
-        eventType: eventType,
-        eventName: eventName
-      });
-
       // Load event data first (only on initial load)
       if (showLoadingSpinner && !eventData) {
         try {
           const eventResponse = await api.get(`/events/${finalChatId}`);
           if (eventResponse.data.success) {
             setEventData(eventResponse.data.data);
-            console.log('✅ Event data loaded:', eventResponse.data.data.name);
           }
         } catch (eventError) {
-          console.log('⚠️ Could not load event data:', eventError.response?.status);
           // Continue anyway - we can still load messages
         }
       }
 
-      // Use the correct message endpoints from your backend
-      let messagesResponse;
-      let endpoint;
-      
-      if (eventType === 'private') {
-        endpoint = `/messages/private/${finalChatId}`;
-      } else {
-        // For both 'event' and 'group' types, use the event endpoint
-        endpoint = `/messages/event/${finalChatId}`;
-      }
+      const endpoint = `/messages/event/${finalChatId}`;
 
       try {
-        console.log(`🔍 Loading messages from: ${endpoint}`);
-        messagesResponse = await api.get(endpoint);
-        
+        const messagesResponse = await api.get(endpoint);
+
         if (messagesResponse.data.success) {
-          console.log(`✅ Messages loaded successfully`);
           const loadedMessages = messagesResponse.data.data || [];
-          
-          // Messages come in chronological order, reverse to show newest at top
-          setMessages(loadedMessages.reverse());
-          
-          // Calculate unread messages (simplified for now)
-          setUnreadCount(0); // Will implement proper unread tracking later
-          setShowUnreadBanner(false);
-          
-          // Auto-scroll to top (newest messages) only on initial load or when we have new messages
-          if (showLoadingSpinner || loadedMessages.length > messages.length) {
-            setTimeout(() => {
-              if (flatListRef.current && loadedMessages.length > 0) {
-                flatListRef.current.scrollToOffset({ offset: 0, animated: true });
-              }
-            }, 100);
-          }
+          // Messages already come back in chronological order - keep it,
+          // newest at the bottom like a normal text thread.
+          setMessages(loadedMessages);
+
+          setTimeout(() => {
+            if (flatListRef.current && loadedMessages.length > 0) {
+              flatListRef.current.scrollToEnd({ animated: false });
+            }
+          }, 100);
         } else {
-          console.log('ℹ️ API returned success: false');
           setMessages([]);
-          setUnreadCount(0);
-          setShowUnreadBanner(false);
         }
       } catch (messagesError) {
-        console.log(`❌ Failed to load messages:`, messagesError.response?.status);
         if (messagesError.response?.status === 404) {
           // This is normal for new chats with no messages yet
-          console.log('ℹ️ No messages found - this might be a new chat');
           setMessages([]);
-          setUnreadCount(0);
-          setShowUnreadBanner(false);
         } else {
-          throw messagesError; // Re-throw other errors
+          throw messagesError;
         }
       }
     } catch (error) {
@@ -136,7 +100,7 @@ export default function ChatScreen({ route, navigation }) {
         setLoading(false);
       }
     }
-  }, [finalChatId, user?.id, eventType, eventName, eventData, messages.length]);
+  }, [finalChatId, user?.id, eventData]);
 
   // Set navigation header
   useEffect(() => {
@@ -166,7 +130,7 @@ export default function ChatScreen({ route, navigation }) {
   // Own sends are skipped here since they're already added optimistically
   // by sendMessage() below.
   useEffect(() => {
-    if (!socket || !finalChatId || !eventType || eventType === 'private') return;
+    if (!socket || !finalChatId || !eventType) return;
 
     const roomChatId = `${eventType}-${finalChatId}`;
     socket.emit('chat:join', { chatType: eventType, chatId: roomChatId });
@@ -175,7 +139,10 @@ export default function ChatScreen({ route, navigation }) {
       if (message.chatId !== roomChatId) return;
       const senderId = message.sender?._id || message.sender;
       if (senderId === user?.id) return;
-      setMessages(prev => [message, ...prev]);
+      setMessages(prev => [...prev, message]);
+      setTimeout(() => {
+        if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
+      }, 100);
     };
     socket.on('message:new', handleNewMessage);
 
@@ -233,11 +200,9 @@ export default function ChatScreen({ route, navigation }) {
       isOwn: true,
       pending: true,
     };
-    setMessages(prev => [optimisticMessage, ...prev]);
+    setMessages(prev => [...prev, optimisticMessage]);
     setTimeout(() => {
-      if (flatListRef.current) {
-        flatListRef.current.scrollToOffset({ offset: 0, animated: true });
-      }
+      if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
     }, 100);
 
     // Prefer the socket path (gets an ack, dedupes retries via clientId) -
@@ -252,8 +217,7 @@ export default function ChatScreen({ route, navigation }) {
       const messageData = {
         text,
         chatType: eventType || 'event',
-        eventId: eventType === 'private' ? undefined : finalChatId,
-        privateConnectionId: eventType === 'private' ? finalChatId : undefined,
+        eventId: finalChatId,
         clientId,
       };
       const response = await api.post('/messages', messageData);
@@ -275,130 +239,88 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  // Format time like YouTube
   const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = (now - date) / (1000 * 60);
-    
-    if (diffInMinutes < 1) return 'now';
-    if (diffInMinutes < 60) return `${Math.floor(diffInMinutes)}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  // Get user initials
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
   };
 
-  // Check if user is organizer
   const isOrganizer = (userId) => {
     return eventData?.organizer === userId || eventData?.organizer?._id === userId;
   };
 
-  // Render unread messages banner (Discord-style)
-  const renderUnreadBanner = () => {
-    if (!showUnreadBanner || unreadCount === 0) return null;
-
-    return (
-      <View style={styles.unreadBanner}>
-        <View style={styles.unreadBannerContent}>
-          <Text style={styles.unreadBannerText}>
-            {unreadCount} new message{unreadCount !== 1 ? 's' : ''} since {formatTime(new Date())}
-          </Text>
-          <TouchableOpacity
-            style={styles.unreadBannerClose}
-            onPress={() => {
-              setShowUnreadBanner(false);
-              setUnreadCount(0);
-            }}
-          >
-            <Ionicons name="close" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  // Render message item (YouTube comment style)
+  // Render message item (iPhone Messages style)
   const renderMessage = ({ item, index }) => {
     const isOwn = item.sender?._id === user?.id || item.isOwn;
     const isOrganizerMessage = isOrganizer(item.sender?._id);
     const senderName = item.sender?.name || 'Unknown User';
-    
+
+    const previousMessage = index > 0 ? messages[index - 1] : null;
+    const showTimestamp = !previousMessage ||
+      new Date(item.createdAt) - new Date(previousMessage.createdAt) > 5 * 60 * 1000;
+    // Group/event chats have multiple senders - show the name above a
+    // bubble whenever the previous message was from someone else.
+    const showSenderName = !isOwn && (!previousMessage || (previousMessage.sender?._id || previousMessage.sender) !== (item.sender?._id || item.sender));
+
     return (
-      <View style={[
-        styles.messageContainer,
-        isOrganizerMessage && styles.organizerMessageContainer,
-        item.pending && styles.pendingMessage
-      ]}>
-        {/* User Avatar */}
-        <View style={styles.avatarContainer}>
-          {item.sender?.photos && item.sender.photos.length > 0 ? (
-            <Image 
-              source={{ uri: item.sender.photos[0].url || item.sender.photos[0] }} 
-              style={styles.avatar}
-            />
-          ) : (
-            <View style={[
-              styles.avatarPlaceholder,
-              isOrganizerMessage && styles.organizerAvatar
-            ]}>
-              <Text style={styles.avatarText}>
-                {getInitials(senderName)}
-              </Text>
+      <View style={styles.messageContainer}>
+        {showTimestamp && (
+          <View style={styles.timestampContainer}>
+            <Text style={styles.timestampText}>{formatTime(item.createdAt)}</Text>
+          </View>
+        )}
+
+        <View style={[
+          styles.messageBubbleContainer,
+          isOwn ? styles.ownMessageContainer : styles.otherMessageContainer
+        ]}>
+          {!isOwn && (
+            <View style={styles.avatarContainer}>
+              {item.sender?.photos && item.sender.photos.length > 0 ? (
+                <Image
+                  source={{ uri: item.sender.photos[0].url || item.sender.photos[0] }}
+                  style={styles.messageAvatar}
+                />
+              ) : (
+                <View style={[styles.messageAvatarPlaceholder, isOrganizerMessage && styles.organizerAvatar]}>
+                  <Text style={styles.messageAvatarText}>{getInitials(senderName)}</Text>
+                </View>
+              )}
             </View>
           )}
-        </View>
 
-        {/* Message Content */}
-        <View style={styles.messageContent}>
-          {/* Header: Name, Badge, Time */}
-          <View style={styles.messageHeader}>
-            <Text style={[
-              styles.senderName,
-              isOrganizerMessage && styles.organizerName
-            ]}>
-              {senderName}
-            </Text>
-            
-            {isOrganizerMessage && (
-              <View style={styles.organizerBadge}>
-                <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.organizerBadgeText}>Organizer</Text>
+          <View style={{ maxWidth: width * 0.75 }}>
+            {showSenderName && (
+              <View style={styles.senderRow}>
+                <Text style={[styles.senderName, isOrganizerMessage && styles.organizerName]}>
+                  {senderName}
+                </Text>
+                {isOrganizerMessage && (
+                  <View style={styles.organizerBadge}>
+                    <Ionicons name="star" size={10} color="#FFD700" />
+                  </View>
+                )}
               </View>
             )}
-            
-            <Text style={styles.messageTime}>
-              {item.failed ? 'Failed to send' : formatTime(item.createdAt)}
-            </Text>
-          </View>
 
-          {/* Message Text */}
-          <Text style={[
-            styles.messageText,
-            isOrganizerMessage && styles.organizerMessageText
-          ]}>
-            {item.text}
-          </Text>
-
-          {/* Message Actions (YouTube-style) */}
-          <View style={styles.messageActions}>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="thumbs-up-outline" size={16} color="#CCCCCC" />
-              <Text style={styles.actionText}>0</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="thumbs-down-outline" size={16} color="#CCCCCC" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.actionButton}>
-              <Text style={styles.replyText}>Reply</Text>
-            </TouchableOpacity>
+            <View style={[
+              styles.messageBubble,
+              isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
+              item.pending && styles.pendingBubble
+            ]}>
+              <Text style={[styles.messageText, isOwn ? styles.ownMessageText : styles.otherMessageText]}>
+                {item.text}
+              </Text>
+              {item.failed && <Text style={styles.failedText}>Failed to send</Text>}
+            </View>
           </View>
         </View>
       </View>
@@ -408,47 +330,33 @@ export default function ChatScreen({ route, navigation }) {
   // Render input area
   const renderInputArea = () => (
     <View style={styles.inputContainer}>
-      {/* User Avatar */}
-      <View style={styles.inputAvatarContainer}>
-        {user?.photos && user.photos.length > 0 ? (
-          <Image 
-            source={{ uri: user.photos[0].url || user.photos[0] }} 
-            style={styles.inputAvatar}
-          />
-        ) : (
-          <View style={styles.inputAvatarPlaceholder}>
-            <Text style={styles.inputAvatarText}>
-              {getInitials(user?.name)}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Input Field */}
       <View style={styles.inputWrapper}>
-        <TextInput
-          style={styles.textInput}
-          value={messageText}
-          onChangeText={setMessageText}
-          placeholder="Add a comment..."
-          placeholderTextColor="#666666"
-          multiline
-          maxLength={1000}
-        />
-        
-        {messageText.trim().length > 0 && (
-          <TouchableOpacity
-            style={styles.sendButton}
-            onPress={sendMessage}
-            disabled={sending}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color="#0078FF" />
-            ) : (
-              <Text style={styles.sendButtonText}>Comment</Text>
-            )}
-          </TouchableOpacity>
-        )}
+        <View style={styles.textInputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={messageText}
+            onChangeText={setMessageText}
+            placeholder="Message"
+            placeholderTextColor="#999999"
+            multiline
+            maxLength={1000}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            (!messageText.trim() || sending) && styles.sendButtonDisabled
+          ]}
+          onPress={sendMessage}
+          disabled={!messageText.trim() || sending}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -481,8 +389,6 @@ export default function ChatScreen({ route, navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {renderUnreadBanner()}
-      
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -491,7 +397,6 @@ export default function ChatScreen({ route, navigation }) {
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
-        inverted={false} // Keep normal order since we're reversing the data
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={60} color="#666666" />
@@ -504,7 +409,7 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         )}
       />
-      
+
       {renderInputArea()}
     </KeyboardAvoidingView>
   );
@@ -515,7 +420,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  
+
   // Loading & Error States
   loadingContainer: {
     flex: 1,
@@ -561,26 +466,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Unread Banner (Discord-style)
-  unreadBanner: {
-    backgroundColor: '#5865F2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  unreadBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  unreadBannerText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  unreadBannerClose: {
-    padding: 4,
-  },
-
   // Messages List
   messagesList: {
     flex: 1,
@@ -591,39 +476,51 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  // Message Container (YouTube comment style)
+  // Message Container (iPhone style)
   messageContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  organizerMessageContainer: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)', // Subtle gold highlight
-    marginHorizontal: -8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FFD700',
-  },
-  pendingMessage: {
-    opacity: 0.5,
+    marginBottom: 8,
   },
 
-  // Avatar
+  // Timestamp (centered)
+  timestampContainer: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  timestampText: {
+    fontSize: 12,
+    color: '#999999',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  // Message Bubble Container
+  messageBubbleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 2,
+  },
+  ownMessageContainer: {
+    justifyContent: 'flex-end',
+  },
+  otherMessageContainer: {
+    justifyContent: 'flex-start',
+  },
+
+  // Avatar (for other users)
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 8,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  messageAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  messageAvatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#333333',
     justifyContent: 'center',
     alignItems: 'center',
@@ -631,141 +528,106 @@ const styles = StyleSheet.create({
   organizerAvatar: {
     backgroundColor: '#FFD700',
   },
-  avatarText: {
+  messageAvatarText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
 
-  // Message Content
-  messageContent: {
-    flex: 1,
-  },
-  messageHeader: {
+  // Sender name (group/event chats have multiple senders)
+  senderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-    gap: 8,
+    gap: 4,
+    marginBottom: 2,
+    marginLeft: 4,
   },
   senderName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#999999',
   },
   organizerName: {
     color: '#FFD700',
   },
   organizerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
     borderRadius: 4,
-    gap: 2,
+    padding: 2,
   },
-  organizerBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFD700',
+
+  // Message Bubble
+  messageBubble: {
+    maxWidth: width * 0.75,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
-  messageTime: {
-    fontSize: 12,
-    color: '#999999',
-    marginLeft: 'auto',
+  ownMessageBubble: {
+    backgroundColor: '#0078FF',
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    backgroundColor: '#333333',
+    borderBottomLeftRadius: 4,
+  },
+  pendingBubble: {
+    opacity: 0.5,
   },
 
   // Message Text
   messageText: {
-    fontSize: 14,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  ownMessageText: {
     color: '#FFFFFF',
-    lineHeight: 20,
-    marginBottom: 8,
   },
-  organizerMessageText: {
-    // Could add special styling for organizer messages
+  otherMessageText: {
+    color: '#FFFFFF',
   },
-
-  // Message Actions (YouTube-style)
-  messageActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#CCCCCC',
-  },
-  replyText: {
-    fontSize: 12,
-    color: '#CCCCCC',
-    fontWeight: '500',
+  failedText: {
+    fontSize: 11,
+    color: '#FF3B30',
+    marginTop: 2,
   },
 
-  // Input Area (YouTube-style)
+  // Input Area
   inputContainer: {
     backgroundColor: '#111111',
     borderTopWidth: 1,
     borderTopColor: '#333333',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
+  },
+  inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'flex-end',
+    gap: 8,
   },
-  inputAvatarContainer: {
-    marginTop: 4,
-  },
-  inputAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  inputAvatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  textInputContainer: {
+    flex: 1,
     backgroundColor: '#333333',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    maxHeight: 100,
+  },
+  textInput: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlignVertical: 'center',
+  },
+  sendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0078FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  inputAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    paddingVertical: 8,
-    paddingHorizontal: 0,
-    fontSize: 14,
-    color: '#FFFFFF',
-    maxHeight: 100,
-  },
-  sendButton: {
-    backgroundColor: '#0078FF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  sendButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+  sendButtonDisabled: {
+    backgroundColor: '#666666',
   },
 
   // Empty State
