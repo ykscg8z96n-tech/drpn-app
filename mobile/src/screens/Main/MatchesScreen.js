@@ -156,8 +156,20 @@ const MatchItem = ({ item, onPress }) => {
   );
 };
 
-export default function MatchesScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('events');
+export default function MatchesScreen({ navigation, route }) {
+  const [activeTab, setActiveTab] = useState(route.params?.initialTab || 'events');
+
+  // Coming back from a group/event/private chat should land on that same
+  // sub-tab, not whatever was last active - useState's initial value only
+  // applies on first mount, so a param change on an already-mounted
+  // screen needs this to actually switch tabs.
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.initialTab) {
+        setActiveTab(route.params.initialTab);
+      }
+    }, [route.params?.initialTab])
+  );
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

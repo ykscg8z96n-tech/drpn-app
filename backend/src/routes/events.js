@@ -403,20 +403,26 @@ router.post('/', [protect,
     // Drop a clickable event-invite card into each invited group's chat
     // so members can see it and join with one tap (POST /:id/quick-join)
     // - group members join directly instead of applying like strangers.
+    // A card failing to post shouldn't fail event creation, but it also
+    // shouldn't fail silently - collect per-group results so the client
+    // can tell the organizer which groups it didn't reach.
+    const groupInviteResults = [];
     for (const group of inviteGroups) {
       try {
         await postEventInviteCard(event, group, req.user.id, req);
+        groupInviteResults.push({ groupId: group._id, groupName: group.name, success: true });
       } catch (inviteError) {
-        console.error('⚠️ Failed to post invite card to group chat:', inviteError);
-        // Event itself was created successfully - don't fail the request.
+        console.error(`⚠️ Failed to post invite card to group "${group.name}" (${group._id}):`, inviteError);
+        groupInviteResults.push({ groupId: group._id, groupName: group.name, success: false, error: inviteError.message });
       }
     }
 
     console.log('✅ Event created successfully:', event._id);
-    
+
     res.status(201).json({
       success: true,
       data: event,
+      groupInviteResults,
       message: `${req.body.type === 'event' ? 'Event' : 'Group'} created successfully!`
     });
     
@@ -570,17 +576,21 @@ router.put('/:id', [protect,
 
     // Only post to groups that weren't already invited - re-editing other
     // fields shouldn't spam the chat with a duplicate card.
+    const groupInviteResults = [];
     for (const group of newlyInvitedGroups) {
       try {
         await postEventInviteCard(updatedEvent, group, req.user.id, req);
+        groupInviteResults.push({ groupId: group._id, groupName: group.name, success: true });
       } catch (inviteError) {
-        console.error('⚠️ Failed to post invite card to group chat:', inviteError);
+        console.error(`⚠️ Failed to post invite card to group "${group.name}" (${group._id}):`, inviteError);
+        groupInviteResults.push({ groupId: group._id, groupName: group.name, success: false, error: inviteError.message });
       }
     }
 
     res.json({
       success: true,
-      data: updatedEvent
+      data: updatedEvent,
+      groupInviteResults
     });
   } catch (error) {
     console.error(error);

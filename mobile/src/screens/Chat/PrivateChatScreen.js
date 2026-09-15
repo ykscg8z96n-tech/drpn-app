@@ -107,7 +107,7 @@ export default function PrivateChatScreen({ route, navigation }) {
           // can hold whatever screen led here (LFG, a notification, a
           // roster row in the Home tab), which felt inconsistent as a
           // "back" target for a chat.
-          onPress={() => navigation.navigate('MatchesMain')}
+          onPress={() => navigation.navigate('MatchesMain', { initialTab: 'private' })}
         >
           <Ionicons name="chevron-back" size={28} color="#0078FF" />
         </TouchableOpacity>
