@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const Event = require('../models/Event');
 const User = require('../models/User');
 const Match = require('../models/Match');
+const Message = require('../models/Message');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -134,6 +135,16 @@ router.get('/nearby', protect, async (req, res) => {
       ];
     }
     
+    // A full event drops out of public discovery - group invitees still
+    // reach it directly via their invite code, they just don't need (or
+    // get) the public swipe/apply flow once capacity is taken.
+    query.$expr = {
+      $or: [
+        { $ne: ['$type', 'event'] },
+        { $lt: ['$currentAttendees', '$capacity'] }
+      ]
+    };
+
     // Add geospatial query if coordinates are valid
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
@@ -211,6 +222,20 @@ router.post('/', [protect,
       });
     }
     
+    // If auto-inviting a group, the requester has to actually run that
+    // group - otherwise anyone could dump an invite code into a chat they
+    // don't belong to.
+    let inviteGroup = null;
+    if (req.body.inviteGroupId) {
+      inviteGroup = await Event.findById(req.body.inviteGroupId);
+      if (!inviteGroup || inviteGroup.type !== 'group' || !inviteGroup.canUserManage(req.user.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only auto-invite a group you organize'
+        });
+      }
+    }
+
     // Type-specific validation
     if (req.body.type === 'event') {
       if (!req.body.eventDate) {
@@ -255,21 +280,46 @@ router.post('/', [protect,
       categories: req.body.categories?.length
         ? Array.from(new Set([req.body.category, ...req.body.categories]))
         : undefined,
+      inviteGroupId: inviteGroup?._id || null,
       organizer: req.user.id,
       admins: [req.user.id],
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    
+
     console.log('💾 Creating event in database...');
     const event = await Event.create(eventData);
-    
+
     // Update user to organizer if not already
     if (!req.user.isOrganizer) {
       await User.findByIdAndUpdate(req.user.id, { isOrganizer: true });
       console.log('👤 Updated user to organizer status');
     }
-    
+
+    // Drop the join code straight into the group's chat so members see it
+    // and can join - group members join directly (see
+    // POST /:id/join-group-invite) instead of applying like strangers.
+    if (inviteGroup) {
+      try {
+        const inviteCode = event.generateInviteCode(req.user.id);
+        await event.save();
+
+        const chatMessage = await Message.createEventMessage(
+          inviteGroup._id,
+          req.user.id,
+          `🎟️ New event "${event.name}" - join with code ${inviteCode}`,
+          'group'
+        );
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`${chatMessage.chatType}:${chatMessage.chatId}`).emit('message:new', chatMessage);
+        }
+      } catch (inviteError) {
+        console.error('⚠️ Failed to post invite code to group chat:', inviteError);
+        // Event itself was created successfully - don't fail the request.
+      }
+    }
+
     console.log('✅ Event created successfully:', event._id);
     
     res.status(201).json({
@@ -461,6 +511,8 @@ router.post('/:id/decide', protect, async (req, res) => {
 
     // If accepting, create a Match record
     if (decision === 'accept') {
+      event.currentAttendees = (event.currentAttendees || 0) + 1;
+      event.closeIfFull();
       try {
         // Check if match already exists (shouldn't happen, but safety check)
         const existingMatch = await Match.findOne({
@@ -675,22 +727,70 @@ router.post('/join/:code', protect, async (req, res) => {
         message: 'You have already applied to this event'
       });
     }
-    
+
+    // Members of the group this event was auto-invited from join directly,
+    // first-come-first-served up to capacity - no organizer approval, unlike
+    // the pending-application path strangers go through below.
+    let isGroupMember = false;
+    if (event.inviteGroupId) {
+      const group = await Event.findById(event.inviteGroupId);
+      isGroupMember = !!group && (
+        group.organizer.toString() === req.user.id ||
+        group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
+      );
+    }
+
+    if (isGroupMember) {
+      if (event.type === 'event' && event.currentAttendees >= event.capacity) {
+        return res.status(400).json({ success: false, message: 'This event is full' });
+      }
+
+      event.applicants.push({
+        userId: req.user.id,
+        inviteCode,
+        status: 'accepted',
+        respondedAt: new Date()
+      });
+      event.currentAttendees = (event.currentAttendees || 0) + 1;
+      event.closeIfFull();
+      event.useInviteCode(inviteCode, req.user.id);
+      await event.save();
+
+      const existingMatch = await Match.findOne({ individual: req.user.id, event: event._id });
+      if (!existingMatch) {
+        await Match.create({
+          individual: req.user.id,
+          event: event._id,
+          status: 'active',
+          matchedAt: new Date()
+        });
+      }
+      await User.findByIdAndUpdate(req.user.id, {
+        $push: { eventsJoined: { eventId: event._id, status: 'accepted' } }
+      });
+
+      return res.json({
+        success: true,
+        data: { eventName: event.name, eventType: event.type },
+        message: `Joined ${event.name}!`
+      });
+    }
+
     // Add user to applicants
     event.applicants.push({
       userId: req.user.id,
       inviteCode: inviteCode,
       status: 'pending'
     });
-    
+
     // Mark invite code as used
     event.useInviteCode(inviteCode, req.user.id);
-    
+
     await event.save();
-    
+
     res.json({
       success: true,
-      data: event,
+      data: { eventName: event.name, eventType: event.type },
       message: `Successfully applied to ${event.name}`
     });
   } catch (error) {
@@ -699,7 +799,7 @@ router.post('/join/:code', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/events/fix-missing-participations  
+// @route   POST /api/events/fix-missing-participations
 // @desc    Create missing participation records for accepted applications
 // @access  Private
 router.post('/fix-missing-participations', protect, async (req, res) => {

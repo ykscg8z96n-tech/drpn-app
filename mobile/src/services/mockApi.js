@@ -35,10 +35,12 @@ export function installMockApi(api) {
   mock.onGet('/events/nearby').reply(() => ok(mockEvents));
   mock.onGet('/events/organizer/my-events').reply(() => ok(myEvents));
   mock.onGet('/events/my-participation').reply(() => ok(mockEventParticipations));
-  mock.onPost('/events/join-by-code').reply((config) => {
-    const { code } = JSON.parse(config.data || '{}');
+  mock.onPost(/\/events\/join\/[\w-]+$/).reply((config) => {
+    const code = config.url.split('/').pop();
     const match = allEvents.find((e) => e.inviteCode === String(code).toUpperCase());
-    return match ? ok(match) : [404, { success: false, message: 'No event found with that invite code.' }];
+    return match
+      ? ok({ eventName: match.name, eventType: match.type })
+      : [404, { success: false, message: 'No event found with that invite code.' }];
   });
   mock.onPost('/events').reply((config) => {
     const body = JSON.parse(config.data || '{}');

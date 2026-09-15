@@ -81,6 +81,16 @@ const eventSchema = new mongoose.Schema({
     required: function() { return this.type === 'group'; }
   },
   
+  // Set when this event was created with "auto-invite" from an existing
+  // group - lets invited group members join directly (first-come-first-
+  // served up to capacity) instead of going through the public
+  // apply/swipe flow strangers use.
+  inviteGroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Event',
+    default: null
+  },
+
   // Organizer and admin management
   organizer: {
     type: mongoose.Schema.Types.ObjectId,
@@ -338,6 +348,23 @@ eventSchema.methods.rejectApplicant = function(userId, organizerId, response = '
   application.organizerResponse = response;
   
   return this.save();
+};
+
+// Once a full event's capacity is taken, any strangers still waiting on a
+// decision aren't getting in - close their applications instead of
+// leaving them pending forever. Only meaningful for type 'event'; groups
+// have no hard capacity field to compare against.
+eventSchema.methods.closeIfFull = function() {
+  if (this.type !== 'event' || this.currentAttendees < this.capacity) {
+    return;
+  }
+  this.applicants.forEach(app => {
+    if (app.status === 'pending') {
+      app.status = 'rejected';
+      app.respondedAt = new Date();
+      app.organizerResponse = 'Event reached capacity';
+    }
+  });
 };
 
 // Method to check if user is organizer or admin
