@@ -6,6 +6,7 @@ const PrivateConnection = require('../models/PrivateConnection');
 const Participation = require('../models/Participation');
 const Event = require('../models/Event');
 const User = require('../models/User');
+const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
 
 // @route   POST /api/private-connections/invite
@@ -116,9 +117,19 @@ router.get('/', protect, async (req, res) => {
 
     const connections = await PrivateConnection.getUserConnections(req.user.id, status);
 
+    // chatParticipation.unreadCount is never actually incremented when a
+    // message arrives - compute the real count from Message's own readBy
+    // tracking instead (mirrors the same fix in routes/participations.js).
+    const connectionsWithUnread = await Promise.all(connections.map(async (connection) => {
+      const uids = [connection.participant.toString(), connection.otherUser.toString()].sort();
+      const chatId = `private-${uids[0]}-${uids[1]}`;
+      const unreadCount = await Message.getUnreadCount('private', chatId, req.user.id);
+      return { ...connection.toObject(), unreadCount };
+    }));
+
     res.json({
       success: true,
-      data: connections
+      data: connectionsWithUnread
     });
 
   } catch (error) {
