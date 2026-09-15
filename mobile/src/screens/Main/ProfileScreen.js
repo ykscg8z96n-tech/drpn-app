@@ -583,7 +583,6 @@ export default function ProfileScreen({ navigation }) {
                   <WebDateInput
                     value={tempBirthday}
                     onChange={setTempBirthday}
-                    max={toDateOnlyString(new Date())}
                   />
                 ) : (
                   <TextInput
