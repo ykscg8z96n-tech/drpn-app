@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import { uploadEventPhoto } from '../../utils/uploadEventPhoto';
 
 // 6 mutually exclusive categories - REMOVED INTERESTS COMPLETELY
 const CATEGORIES = [
@@ -211,8 +212,17 @@ export default function EditEventScreen({ route, navigation }) {
         capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
         groupSize: formData.groupSize ? parseInt(formData.groupSize) : undefined,
         inviteGroupId: selectedGroupForInvite || undefined, // Send group ID for auto-invites
-        eventImage: selectedImage || null, // Send selected image or null for stock image
       });
+
+      // Same as on create - a custom photo needs a real multipart upload,
+      // it can't ride along in this JSON body.
+      if (selectedImage) {
+        try {
+          await uploadEventPhoto(event._id, selectedImage);
+        } catch (photoError) {
+          console.error('Error uploading event photo:', photoError);
+        }
+      }
 
       Alert.alert('Success', `${event.type === 'event' ? 'Event' : 'Group'} updated successfully!`, [
         { 
