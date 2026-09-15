@@ -6,8 +6,32 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
+const { getBotUserId } = require('../services/botUser');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
+
+// Posts a "this event is filled" notice into the invite group's chat the
+// moment an event's capacity is reached - whether it filled with group
+// members or strangers the organizer accepted. Callers pass whether the
+// event just crossed into "full" on this request, so it only fires once.
+async function notifyGroupIfJustFilled(event, req, justBecameFull) {
+  if (!justBecameFull || !event.inviteGroupId) return;
+  try {
+    const botId = await getBotUserId();
+    const message = await Message.createEventMessage(
+      event.inviteGroupId,
+      botId,
+      `🎉 "${event.name}" is now filled!`,
+      'group'
+    );
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to post event-filled notice to group chat:', error);
+  }
+}
 
 // Define valid categories directly in this file
 const VALID_CATEGORIES = ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'];
@@ -510,9 +534,12 @@ router.post('/:id/decide', protect, async (req, res) => {
     application.respondedAt = new Date();
 
     // If accepting, create a Match record
+    let justBecameFull = false;
     if (decision === 'accept') {
+      const wasFull = event.type === 'event' && event.currentAttendees >= event.capacity;
       event.currentAttendees = (event.currentAttendees || 0) + 1;
       event.closeIfFull();
+      justBecameFull = !wasFull && event.type === 'event' && event.currentAttendees >= event.capacity;
       try {
         // Check if match already exists (shouldn't happen, but safety check)
         const existingMatch = await Match.findOne({
@@ -542,6 +569,8 @@ router.post('/:id/decide', protect, async (req, res) => {
 
     // Save the event with updated application status
     await event.save();
+
+    await notifyGroupIfJustFilled(event, req, justBecameFull);
 
     // Update the user's eventsJoined status as well
     try {
@@ -753,8 +782,11 @@ router.post('/join/:code', protect, async (req, res) => {
       });
       event.currentAttendees = (event.currentAttendees || 0) + 1;
       event.closeIfFull();
+      const justBecameFull = event.type === 'event' && event.currentAttendees >= event.capacity;
       event.useInviteCode(inviteCode, req.user.id);
       await event.save();
+
+      await notifyGroupIfJustFilled(event, req, justBecameFull);
 
       const existingMatch = await Match.findOne({ individual: req.user.id, event: event._id });
       if (!existingMatch) {
