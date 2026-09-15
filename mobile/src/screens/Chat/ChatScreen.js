@@ -185,54 +185,90 @@ export default function ChatScreen({ route, navigation }) {
     };
   }, [socket, finalChatId, eventType, user?.id]);
 
+  // Listen for the ack/error of our own sent messages (see sendMessage).
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAck = ({ clientId, _id, seq, createdAt }) => {
+      if (!clientId) return;
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, _id, seq, createdAt, pending: false } : m
+      ));
+    };
+    const handleError = ({ clientId, reason }) => {
+      if (!clientId) return;
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, failed: true, pending: false } : m
+      ));
+      Alert.alert('Error', reason || 'Failed to send message');
+    };
+
+    socket.on('message:ack', handleAck);
+    socket.on('message:error', handleError);
+    return () => {
+      socket.off('message:ack', handleAck);
+      socket.off('message:error', handleError);
+    };
+  }, [socket]);
+
   // Send message
   const sendMessage = async () => {
     const text = messageText.trim();
     if (!text || sending) return;
 
+    setMessageText('');
+
+    const clientId = `${user?.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const roomChatId = `${eventType}-${finalChatId}`;
+
+    // Optimistic bubble - reconciled by message:ack (id/seq filled in) or
+    // flagged failed by message:error, rather than waiting on a request
+    // round trip to show anything.
+    const optimisticMessage = {
+      _id: clientId,
+      clientId,
+      text,
+      sender: user,
+      createdAt: new Date().toISOString(),
+      isOwn: true,
+      pending: true,
+    };
+    setMessages(prev => [optimisticMessage, ...prev]);
+    setTimeout(() => {
+      if (flatListRef.current) {
+        flatListRef.current.scrollToOffset({ offset: 0, animated: true });
+      }
+    }, 100);
+
+    // Prefer the socket path (gets an ack, dedupes retries via clientId) -
+    // fall back to REST only if the socket isn't connected.
+    if (socket && socket.connected) {
+      socket.emit('message:send', { chatType: eventType || 'event', chatId: roomChatId, clientId, text });
+      return;
+    }
+
     setSending(true);
-    
     try {
-      // Use the correct message sending format from your backend
       const messageData = {
         text,
-        chatType: eventType || 'event', // 'event', 'group', or 'private'
+        chatType: eventType || 'event',
         eventId: eventType === 'private' ? undefined : finalChatId,
         privateConnectionId: eventType === 'private' ? finalChatId : undefined,
+        clientId,
       };
-
-      console.log('📤 Sending message:', messageData);
-
       const response = await api.post('/messages', messageData);
-      
       if (response.data.success) {
-        console.log('✅ Message sent successfully');
-        setMessageText('');
-        
-        // Add message to local state immediately for better UX (at the top)
-        const newMessage = {
-          _id: response.data.data._id || Date.now().toString(), // Use server ID if available
-          text,
-          sender: user,
-          createdAt: new Date().toISOString(),
-          isOwn: true
-        };
-        setMessages(prev => [newMessage, ...prev]); // Add at the beginning
-        
-        // Scroll to top (where the new message is)
-        setTimeout(() => {
-          if (flatListRef.current) {
-            flatListRef.current.scrollToOffset({ offset: 0, animated: true });
-          }
-        }, 100);
-        
-        // No need to reload - we already have the message from optimistic update
-        // The server response contains the proper message data
+        setMessages(prev => prev.map(m =>
+          m.clientId === clientId ? { ...m, _id: response.data.data._id, pending: false } : m
+        ));
       } else {
         throw new Error('Server returned success: false');
       }
     } catch (error) {
       console.error('❌ Error sending message:', error);
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, failed: true, pending: false } : m
+      ));
       Alert.alert('Error', `Failed to send message: ${error.response?.data?.message || error.message}`);
     } finally {
       setSending(false);
@@ -296,7 +332,8 @@ export default function ChatScreen({ route, navigation }) {
     return (
       <View style={[
         styles.messageContainer,
-        isOrganizerMessage && styles.organizerMessageContainer
+        isOrganizerMessage && styles.organizerMessageContainer,
+        item.pending && styles.pendingMessage
       ]}>
         {/* User Avatar */}
         <View style={styles.avatarContainer}>
@@ -336,7 +373,7 @@ export default function ChatScreen({ route, navigation }) {
             )}
             
             <Text style={styles.messageTime}>
-              {formatTime(item.createdAt)}
+              {item.failed ? 'Failed to send' : formatTime(item.createdAt)}
             </Text>
           </View>
 
@@ -569,6 +606,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#FFD700',
+  },
+  pendingMessage: {
+    opacity: 0.5,
   },
 
   // Avatar

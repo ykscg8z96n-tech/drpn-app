@@ -4,6 +4,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Participation = require('../models/Participation');
 const Event = require('../models/Event');
+const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
 
 // @route   GET /api/participations
@@ -22,6 +23,10 @@ router.get('/', protect, async (req, res) => {
       isArchived: false
     };
 
+    // .lean() - this handler only reads fields off these (no instance
+    // methods called), and a plain object lets the ad-hoc unreadCount
+    // field below actually show up in the JSON response, unlike a real
+    // Mongoose document which only serializes schema-defined paths.
     let participations = await Participation.find(participationQuery)
       .populate({
         path: 'event',
@@ -30,7 +35,8 @@ router.get('/', protect, async (req, res) => {
           select: 'name photos'
         }
       })
-      .sort('-chatParticipation.lastMessageAt');
+      .sort('-chatParticipation.lastMessageAt')
+      .lean();
 
     // Get organized events (events/groups user created)
     let organizedEventsQuery = {
@@ -90,8 +96,21 @@ router.get('/', protect, async (req, res) => {
       return new Date(bTime) - new Date(aTime);
     });
 
+    // chatParticipation.unreadCount is never actually incremented when a
+    // message comes in (nothing calls updateUnreadCount on the other
+    // participants) - it's permanently 0. Computing it from Message's own
+    // readBy tracking here instead of trusting that stale counter, and
+    // exposing it as a plain `unreadCount` (mobile's MatchesScreen already
+    // reads item.unreadCount, not item.chatParticipation.unreadCount).
+    await Promise.all(allItems.map(async (item) => {
+      const eventDoc = item.event;
+      if (!eventDoc) return;
+      const chatId = `${eventDoc.type}-${eventDoc._id}`;
+      item.unreadCount = await Message.getUnreadCount(eventDoc.type, chatId, req.user.id);
+    }));
+
     console.log(`📊 Total ${type || 'all'} items for user: ${allItems.length}`);
-    
+
     res.json({
       success: true,
       data: allItems

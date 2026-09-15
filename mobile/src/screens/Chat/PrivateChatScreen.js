@@ -145,49 +145,84 @@ export default function PrivateChatScreen({ route, navigation }) {
     };
   }, [socket, chatRoomId, user?.id]);
 
+  // Listen for the ack/error of our own sent messages (see sendMessage).
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAck = ({ clientId, _id, seq, createdAt }) => {
+      if (!clientId) return;
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, _id, seq, createdAt, pending: false } : m
+      ));
+    };
+    const handleError = ({ clientId, reason }) => {
+      if (!clientId) return;
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, failed: true, pending: false } : m
+      ));
+      Alert.alert('Error', reason || 'Failed to send message');
+    };
+
+    socket.on('message:ack', handleAck);
+    socket.on('message:error', handleError);
+    return () => {
+      socket.off('message:ack', handleAck);
+      socket.off('message:error', handleError);
+    };
+  }, [socket]);
+
   // Send message
   const sendMessage = async () => {
     const text = messageText.trim();
     if (!text || sending) return;
 
+    setMessageText('');
+
+    const clientId = `${user?.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const optimisticMessage = {
+      _id: clientId,
+      clientId,
+      text,
+      sender: user,
+      createdAt: new Date().toISOString(),
+      isOwn: true,
+      pending: true,
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    setTimeout(() => {
+      if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Prefer the socket path (gets an ack, dedupes retries via clientId) -
+    // fall back to REST only if the socket isn't connected or the room id
+    // isn't known yet (chatRoomId only arrives after the first load).
+    if (socket && socket.connected && chatRoomId) {
+      socket.emit('message:send', { chatType: 'private', chatId: chatRoomId, clientId, text });
+      return;
+    }
+
     setSending(true);
-    
     try {
       const messageData = {
         text,
         chatType: 'private',
         privateConnectionId: connectionId,
+        clientId,
       };
-
-      console.log('📤 Sending private message:', messageData);
-
       const response = await api.post('/messages', messageData);
-      
       if (response.data.success) {
-        console.log('✅ Private message sent successfully');
-        setMessageText('');
-        
-        // Add message to local state immediately
-        const newMessage = {
-          _id: response.data.data._id || Date.now().toString(),
-          text,
-          sender: user,
-          createdAt: new Date().toISOString(),
-          isOwn: true
-        };
-        setMessages(prev => [...prev, newMessage]);
-        
-        // Scroll to bottom
-        setTimeout(() => {
-          if (flatListRef.current) {
-            flatListRef.current.scrollToEnd({ animated: true });
-          }
-        }, 100);
+        setMessages(prev => prev.map(m =>
+          m.clientId === clientId ? { ...m, _id: response.data.data._id, pending: false } : m
+        ));
       } else {
         throw new Error('Server returned success: false');
       }
     } catch (error) {
       console.error('❌ Error sending private message:', error);
+      setMessages(prev => prev.map(m =>
+        m.clientId === clientId ? { ...m, failed: true, pending: false } : m
+      ));
       Alert.alert('Error', `Failed to send message: ${error.response?.data?.message || error.message}`);
     } finally {
       setSending(false);
@@ -257,7 +292,8 @@ export default function PrivateChatScreen({ route, navigation }) {
           {/* Message Bubble */}
           <View style={[
             styles.messageBubble,
-            isOwn ? styles.ownMessageBubble : styles.otherMessageBubble
+            isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
+            item.pending && styles.pendingBubble
           ]}>
             <Text style={[
               styles.messageText,
@@ -265,6 +301,7 @@ export default function PrivateChatScreen({ route, navigation }) {
             ]}>
               {item.text}
             </Text>
+            {item.failed && <Text style={styles.failedText}>Failed to send</Text>}
           </View>
         </View>
       </View>
@@ -507,6 +544,14 @@ const styles = StyleSheet.create({
   otherMessageBubble: {
     backgroundColor: '#333333', // Dark gray for dark mode
     borderBottomLeftRadius: 4,
+  },
+  pendingBubble: {
+    opacity: 0.5,
+  },
+  failedText: {
+    fontSize: 11,
+    color: '#FF3B30',
+    marginTop: 2,
   },
 
   // Message Text
