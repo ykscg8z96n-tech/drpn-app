@@ -110,14 +110,13 @@ async function postEventInviteCard(event, group, organizerId, req) {
   }
 }
 
-// Promoting someone to owner has to be something they opt into (so an
-// organizer can't just hand you responsibility you didn't want) - sent
-// as a card in a private message the same way an event/group invite is
-// a card in the group chat, rather than applying instantly. Reuses/
-// upserts an accepted PrivateConnection between the two rather than
-// going through POST /private-connections/invite's "both users must be
-// participants" check, since roster membership already establishes that.
-async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
+// Finds or creates an accepted PrivateConnection between two users,
+// bypassing POST /private-connections/invite's "both users must be
+// participants in the same event" check - the caller already knows
+// they're both tied to the same event/group (roster membership,
+// organizer/owner relationship), which is a stronger guarantee than
+// that check makes anyway.
+async function getOrCreatePrivateConnection(fromUserId, toUserId, originEventId) {
   let connection = await PrivateConnection.findOne({
     $or: [
       { participant: fromUserId, otherUser: toUserId },
@@ -128,7 +127,7 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
     connection = await PrivateConnection.create({
       participant: toUserId,
       otherUser: fromUserId,
-      originEvent: event._id,
+      originEvent: originEventId,
       status: 'accepted',
       initiatedBy: 'other_user',
       invite: { sentAt: new Date(), acceptedAt: new Date() }
@@ -138,6 +137,57 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
     connection.invite.acceptedAt = new Date();
     await connection.save();
   }
+  return connection;
+}
+
+// A plain-text private message from one user to another, outside the
+// normal send flow - used for system-initiated notices like "you were
+// removed from this event" that need to reach a specific person
+// directly rather than the event/group's shared chat.
+async function postPrivateNotification(fromUserId, toUserId, originEventId, text, req) {
+  const connection = await getOrCreatePrivateConnection(fromUserId, toUserId, originEventId);
+
+  const uids = [fromUserId.toString(), toUserId.toString()].sort();
+  const chatId = `private-${uids[0]}-${uids[1]}`;
+  const seq = await ChatCounter.nextSeq(chatId);
+  const message = await Message.create({
+    chatType: 'private',
+    chatId,
+    privateConnection: connection._id,
+    sender: fromUserId,
+    text,
+    messageType: 'text',
+    seq
+  });
+  await message.populate('sender', 'name photos');
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+  }
+}
+
+// A plain-text bot announcement into an event/group's own chat - "X
+// joined", "X is now an owner", "X stepped down", "X was removed".
+// Non-fatal by design (callers wrap this in try/catch): the roster
+// change itself already succeeded by the time this runs, so a failure
+// posting the announcement shouldn't undo or fail that.
+async function postSystemAnnouncement(event, text, req) {
+  const botId = await getBotUserId();
+  const message = await Message.createEventMessage(event._id, botId, text, event.type);
+  await message.populate('sender', 'name photos');
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+  }
+}
+
+// Promoting someone to owner has to be something they opt into (so an
+// organizer can't just hand you responsibility you didn't want) - sent
+// as a card in a private message the same way an event/group invite is
+// a card in the group chat, rather than applying instantly.
+async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
+  const connection = await getOrCreatePrivateConnection(fromUserId, toUserId, event._id);
 
   const uids = [fromUserId.toString(), toUserId.toString()].sort();
   const chatId = `private-${uids[0]}-${uids[1]}`;
@@ -827,6 +877,15 @@ router.post('/:id/decide', protect, async (req, res) => {
 
     await notifyGroupIfJustFilled(event, req, justBecameFull);
 
+    if (decision === 'accept') {
+      try {
+        const joinedUser = await User.findById(userId).select('name');
+        await postSystemAnnouncement(event, `${joinedUser?.name || 'Someone'} joined "${event.name}"`, req);
+      } catch (announceError) {
+        console.error('⚠️ Failed to post join announcement:', announceError);
+      }
+    }
+
     // Update the user's eventsJoined status as well
     try {
       const user = await User.findById(userId);
@@ -1044,6 +1103,12 @@ router.post('/:id/quick-join', protect, async (req, res) => {
       $push: { eventsJoined: { eventId: event._id, status: 'accepted' } }
     });
 
+    try {
+      await postSystemAnnouncement(event, `${req.user.name || 'Someone'} joined "${event.name}"`, req);
+    } catch (announceError) {
+      console.error('⚠️ Failed to post join announcement:', announceError);
+    }
+
     res.json({
       success: true,
       data: { eventName: event.name, eventType: event.type },
@@ -1137,6 +1202,14 @@ router.post('/:id/accept-owner-invite', protect, async (req, res) => {
         { $set: { 'systemMessage.data.responseStatus': 'accepted' } }
       );
     }
+    try {
+      const event = await Event.findById(req.params.id).select('name type');
+      if (event) {
+        await postSystemAnnouncement(event, `${req.user.name || 'Someone'} is now an owner of "${event.name}"`, req);
+      }
+    } catch (announceError) {
+      console.error('⚠️ Failed to post owner-accepted announcement:', announceError);
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error in accept-owner-invite:', error);
@@ -1183,6 +1256,11 @@ router.post('/:id/step-down', protect, async (req, res) => {
     }
     event.admins = event.admins.filter(id => id.toString() !== req.user.id);
     await event.save();
+    try {
+      await postSystemAnnouncement(event, `${req.user.name || 'Someone'} stepped down as an owner of "${event.name}"`, req);
+    } catch (announceError) {
+      console.error('⚠️ Failed to post step-down announcement:', announceError);
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error in step-down:', error);
@@ -1231,6 +1309,22 @@ router.post('/:id/kick', protect, async (req, res) => {
     if (wasAccepted) {
       await Match.deleteOne({ individual: userId, event: event._id });
       await Participation.deleteOne({ event: event._id, participant: userId });
+    }
+
+    try {
+      const kickedUser = await User.findById(userId).select('name');
+      await postSystemAnnouncement(event, `${kickedUser?.name || 'Someone'} was removed from "${event.name}"`, req);
+      // Tell the person directly, not just the group - so they know who
+      // removed them and when, rather than just quietly losing access.
+      await postPrivateNotification(
+        req.user.id,
+        userId,
+        event._id,
+        `You were removed from "${event.name}" by ${req.user.name} on ${new Date().toLocaleDateString()}.`,
+        req
+      );
+    } catch (notifyError) {
+      console.error('⚠️ Failed to post kick notifications:', notifyError);
     }
 
     res.json({ success: true, message: 'Removed from roster' });
@@ -1313,6 +1407,12 @@ router.post('/join/:code', protect, async (req, res) => {
       await User.findByIdAndUpdate(req.user.id, {
         $push: { eventsJoined: { eventId: event._id, status: 'accepted' } }
       });
+
+      try {
+        await postSystemAnnouncement(event, `${req.user.name || 'Someone'} joined "${event.name}"`, req);
+      } catch (announceError) {
+        console.error('⚠️ Failed to post join announcement:', announceError);
+      }
 
       return res.json({
         success: true,
