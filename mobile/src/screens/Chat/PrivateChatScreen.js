@@ -103,7 +103,11 @@ export default function PrivateChatScreen({ route, navigation }) {
       headerLeft: () => (
         <TouchableOpacity
           style={styles.headerBackButton}
-          onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MatchesMain')}
+          // Always back to the Chats tab's list, not goBack() - history
+          // can hold whatever screen led here (LFG, a notification, a
+          // roster row in the Home tab), which felt inconsistent as a
+          // "back" target for a chat.
+          onPress={() => navigation.navigate('MatchesMain')}
         >
           <Ionicons name="chevron-back" size={28} color="#0078FF" />
         </TouchableOpacity>
