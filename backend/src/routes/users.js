@@ -141,19 +141,22 @@ router.delete('/photos/:photoId', protect, async (req, res) => {
 router.put('/photos/:photoId/primary', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    
-    // Remove primary flag from all photos
+
+    const photoIndex = user.photos.findIndex(photo => photo._id.toString() === req.params.photoId);
+    if (photoIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Photo not found' });
+    }
+
+    // Several screens read photos[0] directly rather than checking isPrimary
+    // (other users' cards, chat headers, pending applications), so the
+    // primary photo has to actually be first in the array, not just flagged.
     user.photos.forEach(photo => {
       photo.isPrimary = false;
     });
-    
-    // Set selected photo as primary
-    const photo = user.photos.find(photo => photo._id.toString() === req.params.photoId);
-    if (!photo) {
-      return res.status(404).json({ success: false, message: 'Photo not found' });
-    }
-    
-    photo.isPrimary = true;
+    const [primaryPhoto] = user.photos.splice(photoIndex, 1);
+    primaryPhoto.isPrimary = true;
+    user.photos.unshift(primaryPhoto);
+
     await user.save();
 
     res.json({
