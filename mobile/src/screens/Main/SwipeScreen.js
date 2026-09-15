@@ -560,6 +560,8 @@ export default function SwipeScreen({ navigation }) {
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
+            cardVerticalMargin={12}
+            cardHorizontalMargin={0}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
