@@ -421,24 +421,26 @@ router.get('/private/:connectionId', protect, async (req, res) => {
       ? connection.otherUser
       : connection.participant;
 
-    // An owner-invite card's accept/decline buttons need to reflect this
-    // viewer's actual status - computed here rather than trusted from
-    // the client, same as event_invite cards in GET /event/:eventId.
+    // An owner-invite card's accept/decline buttons need to reflect
+    // whether it's actually been responded to. POST /accept-owner-invite
+    // and /decline-owner-invite stamp systemMessage.data.responseStatus
+    // directly onto the message when they know its id - trust that over
+    // re-deriving status from Event.admins/ownerInviteDeclinedBy, which
+    // is fragile if this event/group's name is shared by more than one
+    // document or admin status later changes for an unrelated reason
+    // (e.g. stepping down). Older cards from before that existed fall
+    // back to the Event-based check.
     const ownerInviteMessages = messages.filter(m => m.systemMessage?.type === 'owner_invite');
-    if (ownerInviteMessages.length) {
-      const invitedEventIds = [...new Set(ownerInviteMessages.map(m => m.systemMessage.data.eventId?.toString()))];
+    const legacyOwnerInviteMessages = ownerInviteMessages.filter(m => !m.systemMessage.data.responseStatus);
+    if (legacyOwnerInviteMessages.length) {
+      const invitedEventIds = [...new Set(legacyOwnerInviteMessages.map(m => m.systemMessage.data.eventId?.toString()))];
       const invitedEvents = await Event.find({ _id: { $in: invitedEventIds } })
         .select('admins ownerInviteDeclinedBy');
       const invitedEventsById = new Map(invitedEvents.map(e => [e._id.toString(), e]));
 
-      for (const message of ownerInviteMessages) {
+      for (const message of legacyOwnerInviteMessages) {
         const invitedEvent = invitedEventsById.get(message.systemMessage.data.eventId?.toString());
         const invitedUserId = message.systemMessage.data.invitedUserId?.toString();
-        // Status reflects what the INVITED user did, regardless of who's
-        // looking at the card - the sender is already an owner (that's
-        // how they could send the invite), so checking the viewer's own
-        // admin status would show "accepted" on the sender's copy even
-        // while the recipient still hasn't answered.
         let status = 'pending';
         if (invitedEvent && invitedUserId) {
           if (invitedEvent.admins.some(id => id.toString() === invitedUserId)) {
@@ -448,7 +450,11 @@ router.get('/private/:connectionId', protect, async (req, res) => {
           }
         }
         message.systemMessage.data.status = status;
-        message.systemMessage.data.isRecipient = invitedUserId === req.user.id;
+      }
+    }
+    for (const message of ownerInviteMessages) {
+      if (message.systemMessage.data.responseStatus) {
+        message.systemMessage.data.status = message.systemMessage.data.responseStatus;
       }
     }
 

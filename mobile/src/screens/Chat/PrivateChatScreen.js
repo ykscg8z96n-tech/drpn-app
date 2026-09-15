@@ -43,7 +43,7 @@ export default function PrivateChatScreen({ route, navigation }) {
     if (!eventId) return;
     setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepting' }));
     try {
-      const response = await api.post(`/events/${eventId}/accept-owner-invite`);
+      const response = await api.post(`/events/${eventId}/accept-owner-invite`, { messageId: message._id });
       if (response.data.success) {
         setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepted' }));
       } else {
@@ -63,7 +63,7 @@ export default function PrivateChatScreen({ route, navigation }) {
     setInviteStatuses(prev => ({ ...prev, [message._id]: 'declined' }));
     const eventId = message.systemMessage?.data?.eventId;
     if (eventId) {
-      api.post(`/events/${eventId}/decline-owner-invite`).catch(() => {
+      api.post(`/events/${eventId}/decline-owner-invite`, { messageId: message._id }).catch(() => {
         // Non-critical - worst case the card re-offers the buttons after a reload.
       });
     }
