@@ -21,6 +21,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { uploadEventPhoto } from '../../utils/uploadEventPhoto';
+import GroupMultiSelect from '../../components/GroupMultiSelect';
 
 // 6 mutually exclusive categories - REMOVED INTERESTS COMPLETELY
 const CATEGORIES = [
@@ -51,12 +52,6 @@ export default function CreateNewScreen({ route, navigation }) {
 
   const [myGroups, setMyGroups] = useState([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
-
-  const toggleGroupForInvite = (groupId) => {
-    setSelectedGroupIds(prev =>
-      prev.includes(groupId) ? prev.filter(id => id !== groupId) : [...prev, groupId]
-    );
-  };
   const [selectedImage, setSelectedImage] = useState(null);
 
  const [formData, setFormData] = useState({
@@ -226,9 +221,15 @@ export default function CreateNewScreen({ route, navigation }) {
         }
       }
 
-      Alert.alert('Success', `${type === 'event' ? 'Event' : 'Group'} created successfully!`, [
-        { 
-          text: 'OK', 
+      const failedInvites = (response.data.groupInviteResults || []).filter(r => !r.success);
+      const successMessage = `${type === 'event' ? 'Event' : 'Group'} created successfully!`
+        + (failedInvites.length
+          ? `\n\nCouldn't post the invite card to: ${failedInvites.map(r => r.groupName).join(', ')}`
+          : '');
+
+      Alert.alert('Success', successMessage, [
+        {
+          text: 'OK',
           onPress: () => navigation.goBack()
         }
       ]);
@@ -564,25 +565,11 @@ export default function CreateNewScreen({ route, navigation }) {
                   Create a group first to use auto-invites
                 </Text>
               ) : (
-                <View style={styles.groupChecklist}>
-                  {myGroups.map(group => {
-                    const selected = selectedGroupIds.includes(group._id);
-                    return (
-                      <TouchableOpacity
-                        key={group._id}
-                        style={styles.groupChecklistRow}
-                        onPress={() => toggleGroupForInvite(group._id)}
-                      >
-                        <Ionicons
-                          name={selected ? 'checkbox' : 'square-outline'}
-                          size={22}
-                          color={selected ? '#0078FF' : '#666666'}
-                        />
-                        <Text style={styles.groupChecklistText}>{group.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                <GroupMultiSelect
+                  groups={myGroups}
+                  selectedIds={selectedGroupIds}
+                  onChange={setSelectedGroupIds}
+                />
               )}
 
               {selectedGroupIds.length > 0 && (
