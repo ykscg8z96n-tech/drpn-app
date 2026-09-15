@@ -1,5 +1,5 @@
 // mobile/src/components/EventCard.js - FIXED ORGANIZER PHOTO FUNCTIONS
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -83,17 +82,11 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
     onExpandChange?.(next);
-    Animated.timing(slideAnim, {
-      toValue: next ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
   };
 
   // ✅ FIXED: Organizer profile navigation functions moved to correct scope
@@ -370,52 +363,59 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
         <Ionicons name={expanded ? 'chevron-down' : 'chevron-up'} size={20} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Details panel - slides up over the card; semi-transparent so the
-          image behind stays partly visible, and scrollable since a long
-          description plus everything else can outgrow the card. */}
-      <Animated.View
-        style={[
-          styles.detailsPanel,
-          {
-            height: slideAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, DETAILS_PANEL_HEIGHT],
-            }),
-          },
-        ]}
-        pointerEvents={expanded ? 'auto' : 'none'}
+      {/* Details panel - a real Modal rather than an overlay inside the
+          card. The deck-swiper's disableXSwipe props only stop a swipe
+          from completing, not the drag itself, so a same-tree overlay
+          still fights the swiper's gesture responder for a scroll
+          touch. A Modal renders on its own layer above everything,
+          completely outside the swiper's gesture tree, so the card is
+          genuinely frozen and the scroll is never contested. */}
+      <Modal
+        visible={expanded}
+        transparent
+        animationType="slide"
+        onRequestClose={toggleExpanded}
       >
-        <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.detailsDescription}>{event.description}</Text>
+        <TouchableOpacity style={styles.detailsOverlay} activeOpacity={1} onPress={toggleExpanded}>
+          <TouchableOpacity style={styles.detailsPanel} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <TouchableOpacity style={styles.expandHandleModal} onPress={toggleExpanded}>
+              <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.organizerContainer} onPress={() => setShowOrganizerProfile(true)}>
-            <View style={styles.organizerInfo}>
-              {event.organizer?.photos && event.organizer.photos.length > 0 && event.organizer.photos[0] ? (
-                <Image
-                  source={{ uri: event.organizer.photos[0].url }}
-                  style={styles.organizerPhoto}
-                />
-              ) : (
-                <View style={styles.organizerPhotoPlaceholder}>
-                  <Text style={styles.organizerInitial}>
-                    {(event.organizer?.name || 'U').charAt(0).toUpperCase()}
+            <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.eventTitle}>{event.name}</Text>
+              <Text style={styles.detailsDescription}>{event.description}</Text>
+
+              <TouchableOpacity style={styles.organizerContainer} onPress={() => setShowOrganizerProfile(true)}>
+                <View style={styles.organizerInfo}>
+                  {event.organizer?.photos && event.organizer.photos.length > 0 && event.organizer.photos[0] ? (
+                    <Image
+                      source={{ uri: event.organizer.photos[0].url }}
+                      style={styles.organizerPhoto}
+                    />
+                  ) : (
+                    <View style={styles.organizerPhotoPlaceholder}>
+                      <Text style={styles.organizerInitial}>
+                        {(event.organizer?.name || 'U').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.organizerName}>
+                    by {event.organizer?.name || 'Unknown'}
                   </Text>
                 </View>
-              )}
-              <Text style={styles.organizerName}>
-                by {event.organizer?.name || 'Unknown'}
-              </Text>
-            </View>
-          </TouchableOpacity>
+              </TouchableOpacity>
 
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={16} color="#C7C4C4" />
-            <Text style={styles.locationText}>
-              {event.location?.address || event.location?.city || 'Location TBD'}
-            </Text>
-          </View>
-        </ScrollView>
-      </Animated.View>
+              <View style={styles.locationRow}>
+                <Ionicons name="location-outline" size={16} color="#C7C4C4" />
+                <Text style={styles.locationText}>
+                  {event.location?.address || event.location?.city || 'Location TBD'}
+                </Text>
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Render organizer profile modal */}
       {renderOrganizerProfile()}
@@ -766,15 +766,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
+  detailsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
   detailsPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(10, 10, 10, 0.92)',
+    height: DETAILS_PANEL_HEIGHT,
+    backgroundColor: 'rgba(15, 15, 15, 0.94)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: 'hidden',
+  },
+  expandHandleModal: {
+    alignSelf: 'center',
+    width: 36,
+    height: 20,
+    marginTop: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   detailsScroll: {
     flex: 1,
