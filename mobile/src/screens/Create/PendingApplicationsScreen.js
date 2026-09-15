@@ -303,52 +303,36 @@ export default function PendingApplicationsScreen({ route, navigation }) {
   };
 
   const handleStartChat = async (userData) => {
+    // Starting a chat is instant and reversible (and a no-op if one
+    // already exists - see POST /private-connections/invite) - a
+    // confirmation dialog just adds a click, especially annoying when
+    // reopening a conversation you already started.
     try {
-      Alert.alert(
-        'Start Private Chat',
-        `Start a private chat with ${userData.name}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Start',
-            onPress: async () => {
-              try {
-                const response = await api.post('/private-connections/invite', {
-                  toUserId: userData._id,
-                  originEventId: event._id,
-                  message: `Hi ${userData.name}! I'd love to chat privately after meeting at ${event.name}.`
-                });
+      const response = await api.post('/private-connections/invite', {
+        toUserId: userData._id,
+        originEventId: event._id,
+        message: `Hi ${userData.name}! I'd love to chat privately after meeting at ${event.name}.`
+      });
 
-                if (response.data.success) {
-                  // This screen lives in the Home tab's own stack -
-                  // PrivateChat is a screen in the Chats tab's stack, so a
-                  // plain navigate('PrivateChat') can't find it. Navigating
-                  // to the tab by name with a nested screen/params is how
-                  // React Navigation crosses between sibling tab stacks.
-                  navigation.navigate('Chats', {
-                    screen: 'PrivateChat',
-                    params: {
-                      connectionId: response.data.data._id,
-                      otherUser: { name: userData.name, image: userData.photos?.[0]?.url || userData.photos?.[0] }
-                    }
-                  });
-                } else {
-                  Alert.alert('Error', response.data.message || 'Failed to start chat');
-                }
-              } catch (error) {
-                console.error('Error starting chat:', error);
-                if (error.response?.data?.message) {
-                  Alert.alert('Error', error.response.data.message);
-                } else {
-                  Alert.alert('Error', 'Failed to start private chat');
-                }
-              }
-            }
+      if (response.data.success) {
+        // This screen lives in the Home tab's own stack - PrivateChat is
+        // a screen in the Chats tab's stack, so a plain
+        // navigate('PrivateChat') can't find it. Navigating to the tab
+        // by name with a nested screen/params is how React Navigation
+        // crosses between sibling tab stacks.
+        navigation.navigate('Chats', {
+          screen: 'PrivateChat',
+          params: {
+            connectionId: response.data.data._id,
+            otherUser: { name: userData.name, image: userData.photos?.[0]?.url || userData.photos?.[0] }
           }
-        ]
-      );
+        });
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to start chat');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Something went wrong');
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to start private chat');
     }
   };
 
