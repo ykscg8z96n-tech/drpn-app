@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import TermsOfServiceScreen from './TermsOfServiceScreen';
+import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 
 const signupSchema = Yup.object().shape({
   name: Yup.string().min(2, 'Name must be at least 2 characters').required('Name is required'),
@@ -28,6 +30,8 @@ const signupSchema = Yup.object().shape({
 export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const { signUp } = useAuth();
   const navigation = useNavigation();
 
@@ -152,11 +156,11 @@ export default function SignupScreen() {
                 </View>
                 <Text style={styles.termsText}>
                   I'm 18 or older and I agree to the{' '}
-                  <Text style={styles.termsLink} onPress={() => navigation.navigate('TermsOfService')}>
+                  <Text style={styles.termsLink} onPress={() => setShowTerms(true)}>
                     Terms of Service
                   </Text>{' '}
                   and{' '}
-                  <Text style={styles.termsLink} onPress={() => navigation.navigate('PrivacyPolicy')}>
+                  <Text style={styles.termsLink} onPress={() => setShowPrivacy(true)}>
                     Privacy Policy
                   </Text>
                 </Text>
@@ -184,6 +188,9 @@ export default function SignupScreen() {
           )}
         </Formik>
       </ScrollView>
+
+      <TermsOfServiceScreen visible={showTerms} onClose={() => setShowTerms(false)} />
+      <PrivacyPolicyScreen visible={showPrivacy} onClose={() => setShowPrivacy(false)} />
     </KeyboardAvoidingView>
   );
 }
