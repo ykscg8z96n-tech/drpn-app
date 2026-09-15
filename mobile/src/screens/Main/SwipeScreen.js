@@ -136,7 +136,7 @@ export default function SwipeScreen({ navigation }) {
       }).start();
     } else {
       // Start from underneath the nav menu
-      slideAnim.setValue(Platform.OS === 'ios' ? 173 : 140); // Height of drawer + nav menu
+      slideAnim.setValue(Platform.OS === 'ios' ? 238 : 200); // Height of drawer + nav menu
     }
   }, [showFilterDrawer]);
 
@@ -480,6 +480,21 @@ export default function SwipeScreen({ navigation }) {
 
                 </ScrollView>
                 </View>
+
+                {/* Row 3: browse location */}
+                <View style={styles.filterRow}>
+                  <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
+                    <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
+                    <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
+                      {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+                    </Text>
+                    {browseLocation && (
+                      <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={16} color="#999999" />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             </Animated.View>
           </TouchableOpacity>
@@ -653,10 +668,6 @@ export default function SwipeScreen({ navigation }) {
           <Ionicons name="heart" size={36} color="#00B000" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.button]} onPress={openLocationFilter}>
-          <Ionicons name="location-outline" size={24} color={browseLocation ? '#0078FF' : '#666666'} />
-        </TouchableOpacity>
-
         <View style={styles.filterButtonWrap}>
           <Animated.View
             pointerEvents="none"
@@ -792,6 +803,21 @@ export default function SwipeScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
               </ScrollView>
+              </View>
+
+              {/* Row 3: browse location */}
+              <View style={styles.filterRow}>
+                <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
+                  <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
+                  <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
+                    {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+                  </Text>
+                  {browseLocation && (
+                    <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color="#999999" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -998,7 +1024,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     paddingTop: 12,
     paddingBottom: 12,
-    height: Platform.OS === 'ios' ? 140 : 120, // Two rows: type filter + categories
+    height: Platform.OS === 'ios' ? 205 : 180, // Three rows: type filter, categories, location
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 83 : 70, // Sit just above the nav menu
     left: 0,
@@ -1008,7 +1034,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: '50%',
+    height: '33.33%',
+  },
+  locationFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  locationFilterRowText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
   },
   drawerContent: {
     flexDirection: 'column',
