@@ -136,7 +136,7 @@ export default function SwipeScreen({ navigation }) {
       }).start();
     } else {
       // Start from underneath the nav menu
-      slideAnim.setValue(Platform.OS === 'ios' ? 238 : 200); // Height of drawer + nav menu
+      slideAnim.setValue(Platform.OS === 'ios' ? 223 : 185); // Height of drawer + nav menu
     }
   }, [showFilterDrawer]);
 
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     paddingTop: 12,
     paddingBottom: 12,
-    height: Platform.OS === 'ios' ? 205 : 180, // Three rows: type filter, categories, location
+    height: Platform.OS === 'ios' ? 190 : 165, // Three rows: type filter, categories, location
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 83 : 70, // Sit just above the nav menu
     left: 0,
@@ -1040,13 +1040,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
+    alignSelf: 'flex-start',
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    maxWidth: '100%',
   },
   locationFilterRowText: {
-    flex: 1,
+    flexShrink: 1,
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   drawerContent: {
     flexDirection: 'column',
