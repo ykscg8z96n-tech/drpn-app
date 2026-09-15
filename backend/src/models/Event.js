@@ -39,13 +39,23 @@ const eventSchema = new mongoose.Schema({
     state: String
   },
   
-  // Single category (no user preferences needed)
+  // Primary category - kept as a single string for filtering, stock
+  // images and badges that only ever show one category. Always equal to
+  // categories[0].
   category: {
     type: String,
     enum: ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'],
     required: true
   },
-  
+  // Full category selection - groups can belong to more than one category
+  // (e.g. a group that plays both cards and tabletop games); events stay
+  // single-category, so this is always [category] for events.
+  categories: {
+    type: [String],
+    enum: ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'],
+    default: undefined
+  },
+
   // Event specific fields
   eventDate: {
     type: Date,

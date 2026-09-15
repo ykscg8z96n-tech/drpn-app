@@ -193,6 +193,8 @@ router.post('/', [protect,
   body('name').notEmpty().trim().withMessage('Name is required'),
   body('description').notEmpty().trim().withMessage('Description is required'),
   body('category').isIn(VALID_CATEGORIES).withMessage(`Category must be one of: ${VALID_CATEGORIES.join(', ')}`), // CHANGED from interests
+  body('categories').optional().isArray({ min: 1 }).withMessage('Categories must be a non-empty array'),
+  body('categories.*').optional().isIn(VALID_CATEGORIES).withMessage(`Each category must be one of: ${VALID_CATEGORIES.join(', ')}`),
   body('location.coordinates').isArray({ min: 2, max: 2 }).withMessage('Location coordinates must be an array of 2 numbers'),
   body('location.address').notEmpty().trim().withMessage('Location address is required')
 ], async (req, res) => {
@@ -245,9 +247,14 @@ router.post('/', [protect,
       }
     }
     
-    // Create event data
+    // Create event data - category stays the single primary category
+    // (used for filtering, stock images, badges); categories only carries
+    // extra selections for groups, and always includes the primary one.
     const eventData = {
       ...req.body,
+      categories: req.body.categories?.length
+        ? Array.from(new Set([req.body.category, ...req.body.categories]))
+        : undefined,
       organizer: req.user.id,
       admins: [req.user.id],
       createdAt: new Date(),
@@ -302,7 +309,9 @@ router.post('/', [protect,
 router.put('/:id', [protect,
   body('name').optional().notEmpty().trim(),
   body('description').optional().notEmpty().trim(),
-  body('category').optional().isIn(VALID_CATEGORIES).withMessage(`Category must be one of: ${VALID_CATEGORIES.join(', ')}`) // CHANGED from interests
+  body('category').optional().isIn(VALID_CATEGORIES).withMessage(`Category must be one of: ${VALID_CATEGORIES.join(', ')}`), // CHANGED from interests
+  body('categories').optional().isArray({ min: 1 }).withMessage('Categories must be a non-empty array'),
+  body('categories.*').optional().isIn(VALID_CATEGORIES).withMessage(`Each category must be one of: ${VALID_CATEGORIES.join(', ')}`)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -322,15 +331,21 @@ router.put('/:id', [protect,
     }
     
     // CHANGED: Update allowed fields to include category instead of interests
-    const allowedUpdates = ['name', 'description', 'category', 'eventDate', 'capacity', 'groupSize', 'meetingFrequency', 'ageRange', 'genderPreference', 'location', 'isPublic'];
+    const allowedUpdates = ['name', 'description', 'category', 'categories', 'eventDate', 'capacity', 'groupSize', 'meetingFrequency', 'ageRange', 'genderPreference', 'location', 'isPublic'];
     const updates = {};
-    
+
     allowedUpdates.forEach(field => {
       if (req.body[field] !== undefined) {
         updates[field] = req.body[field];
       }
     });
-    
+
+    // Keep categories in sync with the primary category, same as on create.
+    if (updates.categories?.length) {
+      const primary = updates.category || event.category;
+      updates.categories = Array.from(new Set([primary, ...updates.categories]));
+    }
+
     updates.updatedAt = new Date();
     
     const updatedEvent = await Event.findByIdAndUpdate(
