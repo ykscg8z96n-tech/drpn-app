@@ -6,8 +6,11 @@ const User = require('../models/User');
 const Event = require('../models/Event');
 const Match = require('../models/Match');
 const Participation = require('../models/Participation');
+const PrivateConnection = require('../models/PrivateConnection');
+const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
+const { getBotUserId } = require('../services/botUser');
 
 // No need for category validation since users don't have preferred categories
 // const VALID_CATEGORIES = ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'];
@@ -538,6 +541,76 @@ router.get('/stats', protect, async (req, res) => {
 
 // Blocking is handled per-chat via PrivateConnection.blockUser()/unblockUser()
 // (see routes/private-connections.js :id/block), not at the User level.
+
+// @route   DELETE /api/users/me
+// @desc    Permanently delete the caller's own account. Cascades across
+//          every place a user is referenced rather than leaving dangling
+//          ObjectIds: events they solely organize get handed off to an
+//          existing admin (or archived if there isn't one) so the event
+//          doesn't end up with no one able to manage it; everywhere else
+//          they're just removed from rosters/admin lists, or their own
+//          records (participations, connections, matches) are deleted
+//          outright. Chat messages are left as-is - deleting them would
+//          gut the remaining participants' history, and the UI already
+//          falls back to "Unknown User" for a sender that no longer
+//          resolves.
+// @access  Private
+router.delete('/me', protect, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const organizedEvents = await Event.find({ organizer: userId, isArchived: { $ne: true } });
+    const botId = await getBotUserId();
+
+    for (const event of organizedEvents) {
+      const remainingAdmins = event.admins.filter(id => id.toString() !== userId);
+      if (remainingAdmins.length > 0) {
+        const [newOrganizerId] = remainingAdmins;
+        event.organizer = newOrganizerId;
+        event.admins = remainingAdmins.filter(id => id.toString() !== newOrganizerId.toString());
+        await event.save();
+        try {
+          const newOrganizer = await User.findById(newOrganizerId).select('name');
+          await Message.createEventMessage(
+            event._id,
+            botId,
+            `${newOrganizer?.name || 'An existing owner'} is now the organizer of "${event.name}" - the previous organizer's account was deleted.`,
+            event.type
+          );
+        } catch (announceError) {
+          console.error('⚠️ Failed to post organizer-handoff announcement:', announceError);
+        }
+      } else {
+        // No one else to hand it to - archive rather than delete outright,
+        // so it drops out of discovery but other participants' history
+        // (matches, past messages) isn't destroyed with it.
+        event.isArchived = true;
+        await event.save();
+      }
+    }
+
+    // Everywhere else this account is just one entry among others -
+    // remove it rather than handing anything off.
+    await Event.updateMany(
+      { admins: userId },
+      { $pull: { admins: userId } }
+    );
+    await Event.updateMany(
+      {},
+      { $pull: { applicants: { userId }, passedBy: userId, ownerInviteDeclinedBy: userId } }
+    );
+    await Participation.deleteMany({ participant: userId });
+    await PrivateConnection.deleteMany({ $or: [{ participant: userId }, { otherUser: userId }] });
+    await Match.deleteMany({ individual: userId });
+
+    await User.findByIdAndDelete(userId);
+
+    res.json({ success: true, message: 'Account deleted' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // @route   GET /api/users/:id
 // @desc    Get another user's public profile (e.g. tapping a name/avatar

@@ -420,6 +420,27 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     );
   };
 
+  const handleTransferOwnership = (userData) => {
+    Alert.alert(
+      'Transfer Ownership',
+      `Send ${userData.name} a request to become the organizer of "${event.name}"? You'll be added as an owner once they accept, and they'll have full organizer control.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Request',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/transfer-ownership`, { userId: userData._id });
+              Alert.alert('Sent', `Transfer request sent to ${userData.name}.`);
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to send transfer request');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleKick = (userData) => {
     Alert.alert(
       'Remove from Roster',
@@ -555,11 +576,13 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         title={actionMenuUser?.name}
         options={[
           { label: 'Make Owner', value: 'promote' },
+          ...(isOrganizer ? [{ label: 'Transfer Ownership', value: 'transfer' }] : []),
           { label: 'Remove from Roster', value: 'kick' },
         ]}
         onSelect={(action) => {
           const targetUser = actionMenuUser;
           if (action === 'promote') handleMakeOwner(targetUser);
+          else if (action === 'transfer') handleTransferOwnership(targetUser);
           else if (action === 'kick') handleKick(targetUser);
         }}
         onClose={() => setActionMenuUser(null)}
