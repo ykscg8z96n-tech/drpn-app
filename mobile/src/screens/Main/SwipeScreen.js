@@ -22,6 +22,7 @@ import EventCard from '../../components/EventCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFilter } from '../../contexts/FilterContext';
 import { USE_MOCK_API } from '../../utils/constants';
+import LocationFilterModal from '../../components/LocationFilterModal';
 
 const DEMO_LOCATION = { latitude: 30.2672, longitude: -97.7431 };
 
@@ -55,6 +56,12 @@ export default function SwipeScreen({ navigation }) {
     selectFilter,
     clearFilter,
     selectTypeFilter,
+    browseLocation,
+    setBrowseLocation,
+    clearBrowseLocation,
+    showLocationFilter,
+    openLocationFilter,
+    closeLocationFilter,
   } = useFilter();
   const slideAnim = useRef(new Animated.Value(200)).current;
   const swipeHintX = useRef(new Animated.Value(0)).current;
@@ -74,10 +81,10 @@ export default function SwipeScreen({ navigation }) {
   }, [user]);
 
   useEffect(() => {
-    if (userLocation && user) {
+    if ((browseLocation || userLocation) && user) {
       fetchNearbyEvents();
     }
-  }, [userLocation, user, selectedFilter, selectedTypeFilter]);
+  }, [userLocation, browseLocation, user, selectedFilter, selectedTypeFilter]);
 
   // Play a one-time "these are swipeable / this is filterable" hint once
   // the first batch of cards has loaded.
@@ -163,16 +170,21 @@ export default function SwipeScreen({ navigation }) {
   };
 
   const fetchNearbyEvents = async () => {
-    if (!user || !userLocation) return;
-    
+    // A browse-location override (picking somewhere other than "near me")
+    // takes priority over the device's live GPS location, so it's used
+    // even before the device location has resolved.
+    const effectiveLocation = browseLocation
+      ? { latitude: browseLocation.latitude, longitude: browseLocation.longitude }
+      : userLocation;
+    if (!user || !effectiveLocation) return;
+
     try {
       setLoading(true);
-      
-      // Use actual user location instead of hardcoded 0,0
+
       const params = {
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-        radius: (user.searchRadius || 25) * 1000, // Convert km to meters, default 25km
+        latitude: effectiveLocation.latitude,
+        longitude: effectiveLocation.longitude,
+        radius: (browseLocation?.radiusKm || user.searchRadius || 25) * 1000, // km to meters
         limit: 20,
       };
 
@@ -304,7 +316,7 @@ export default function SwipeScreen({ navigation }) {
     );
   }
 
-  if (!userLocation) {
+  if (!userLocation && !browseLocation) {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="location-outline" size={64} color="#666161" />
@@ -333,13 +345,21 @@ export default function SwipeScreen({ navigation }) {
             {selectedFilter ? 'No events found in this category' : 'No events found nearby'}
           </Text>
           <Text style={styles.emptySubtext}>
-            {selectedFilter ? 'Try a different category or check back later!' : 'Try creating one or check back later!'}
+            {browseLocation
+              ? `Nothing within ${browseLocation.radiusKm}km of ${browseLocation.label}`
+              : (selectedFilter ? 'Try a different category or check back later!' : 'Try creating one or check back later!')}
           </Text>
           {selectedFilter && (
             <TouchableOpacity style={styles.refreshButton} onPress={handleClearFilter}>
               <Text style={styles.refreshButtonText}>Clear Filter</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity style={styles.locationLink} onPress={openLocationFilter}>
+            <Ionicons name="location-outline" size={16} color="#0078FF" />
+            <Text style={styles.locationLinkText}>
+              {browseLocation ? 'Change browse location' : 'Browse events somewhere else'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Filter Drawer */}
@@ -464,12 +484,31 @@ export default function SwipeScreen({ navigation }) {
             </Animated.View>
           </TouchableOpacity>
         </Modal>
+
+        <LocationFilterModal
+          visible={showLocationFilter}
+          onClose={closeLocationFilter}
+          onApply={(location) => { setBrowseLocation(location); closeLocationFilter(); }}
+          initialLocation={browseLocation}
+          deviceLocation={userLocation}
+        />
       </View>
     );
   }
 
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
+        {browseLocation && (
+          <TouchableOpacity style={styles.locationBanner} onPress={openLocationFilter}>
+            <Ionicons name="location" size={14} color="#0078FF" />
+            <Text style={styles.locationBannerText} numberOfLines={1}>
+              Browsing {browseLocation.label} · {browseLocation.radiusKm}km
+            </Text>
+            <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color="#999999" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        )}
         <Animated.View
           style={[
             styles.swiperContainer,
@@ -614,6 +653,10 @@ export default function SwipeScreen({ navigation }) {
           <Ionicons name="heart" size={36} color="#00B000" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={[styles.button]} onPress={openLocationFilter}>
+          <Ionicons name="location-outline" size={24} color={browseLocation ? '#0078FF' : '#666666'} />
+        </TouchableOpacity>
+
         <View style={styles.filterButtonWrap}>
           <Animated.View
             pointerEvents="none"
@@ -754,6 +797,14 @@ export default function SwipeScreen({ navigation }) {
           </Animated.View>
         </TouchableOpacity>
       </Modal>
+
+      <LocationFilterModal
+        visible={showLocationFilter}
+        onClose={closeLocationFilter}
+        onApply={(location) => { setBrowseLocation(location); closeLocationFilter(); }}
+        initialLocation={browseLocation}
+        deviceLocation={userLocation}
+      />
     </View>
   );
 }
@@ -802,6 +853,34 @@ const styles = StyleSheet.create({
   },
   refreshButtonText: {
     color: 'white',
+    fontWeight: '600',
+  },
+  locationLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+  },
+  locationLinkText: {
+    color: '#0078FF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  locationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0, 120, 255, 0.12)',
+    borderRadius: 20,
+  },
+  locationBannerText: {
+    flex: 1,
+    color: '#0078FF',
+    fontSize: 13,
     fontWeight: '600',
   },
     swiperContainer: {
