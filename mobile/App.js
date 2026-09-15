@@ -15,6 +15,28 @@ import MainNavigator from './src/navigation/MainNavigator';
 
 const Stack = createStackNavigator();
 
+// Lets a shared "…/join/ABC123" link open straight to the join-by-code
+// screen with the code pre-filled, instead of landing on the app with no
+// indication of what to do next. Only takes effect once the user is
+// signed in and the Main stack is mounted - if they aren't logged in yet,
+// the link just opens the app normally; there's no persisting it through
+// a login redirect yet.
+const linking = {
+  config: {
+    screens: {
+      Main: {
+        screens: {
+          Invite: {
+            screens: {
+              InviteMain: 'join/:code'
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
 function RootNavigator() {
   const { user, loading } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
@@ -33,7 +55,7 @@ function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           <Stack.Screen name="Main" component={MainNavigator} />
