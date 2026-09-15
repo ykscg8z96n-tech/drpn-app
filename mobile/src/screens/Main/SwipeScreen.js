@@ -42,6 +42,7 @@ export default function SwipeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [cardIndex, setCardIndex] = useState(0);
   const [userLocation, setUserLocation] = useState(null);
+  const [cardExpanded, setCardExpanded] = useState(false);
   const swiperRef = useRef(null);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -355,44 +356,44 @@ export default function SwipeScreen({ navigation }) {
                 style={styles.drawerContent}
                 onPress={(e) => e.stopPropagation()}
               >
-                {/* Filter Section */}
-                <View style={styles.lfgSection}>
-                  <View style={styles.lfgItem}>
-                    <Ionicons name="funnel" size={24} color="#0078FF" />
-                    <Text style={styles.lfgText}>Filter</Text>
+                {/* Row 1: type filter */}
+                <View style={styles.filterRow}>
+                  <View style={styles.lfgSection}>
+                    <View style={styles.lfgItem}>
+                      <Ionicons name="funnel" size={24} color="#0078FF" />
+                      <Text style={styles.lfgText}>Filter</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.typeFilterRow}>
+                    {[
+                      { id: null, label: 'All' },
+                      { id: 'event', label: 'Events' },
+                      { id: 'group', label: 'Groups' },
+                    ].map((opt) => (
+                      <TouchableOpacity
+                        key={opt.label}
+                        style={[
+                          styles.typeFilterButton,
+                          selectedTypeFilter === opt.id && styles.typeFilterButtonActive
+                        ]}
+                        onPress={() => selectTypeFilter(opt.id)}
+                      >
+                        <Text style={[
+                          styles.typeFilterButtonText,
+                          selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
+                        ]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
 
-                <View style={styles.divider} />
-
-                {/* Event vs Group */}
-                <View style={styles.typeFilterRow}>
-                  {[
-                    { id: null, label: 'All' },
-                    { id: 'event', label: 'Events' },
-                    { id: 'group', label: 'Groups' },
-                  ].map((opt) => (
-                    <TouchableOpacity
-                      key={opt.label}
-                      style={[
-                        styles.typeFilterButton,
-                        selectedTypeFilter === opt.id && styles.typeFilterButtonActive
-                      ]}
-                      onPress={() => selectTypeFilter(opt.id)}
-                    >
-                      <Text style={[
-                        styles.typeFilterButtonText,
-                        selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
-                      ]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <View style={styles.divider} />
-
-                {/* Categories */}
+                {/* Row 2: categories, full width */}
+                <View style={styles.filterRow}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -447,6 +448,7 @@ export default function SwipeScreen({ navigation }) {
                   ))}
 
                 </ScrollView>
+                </View>
               </TouchableOpacity>
             </Animated.View>
           </TouchableOpacity>
@@ -488,7 +490,7 @@ export default function SwipeScreen({ navigation }) {
           <Swiper
             ref={swiperRef}
             cards={events}
-            renderCard={(event) => <EventCard event={event} />}
+            renderCard={(event) => <EventCard event={event} onExpandChange={setCardExpanded} />}
             onSwiped={onSwiped}
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
@@ -499,6 +501,10 @@ export default function SwipeScreen({ navigation }) {
             animateOverlayLabelsOpacity
             animateCardOpacity
             swipeBackCard
+            disableTopSwipe={cardExpanded}
+            disableBottomSwipe={cardExpanded}
+            disableLeftSwipe={cardExpanded}
+            disableRightSwipe={cardExpanded}
             onSwipedLeft={(index) => onSwipe('left', events[index]._id)}
             onSwipedRight={(index) => onSwipe('right', events[index]._id)}
             overlayLabels={{
@@ -641,44 +647,44 @@ export default function SwipeScreen({ navigation }) {
               style={styles.drawerContent}
               onPress={(e) => e.stopPropagation()}
             >
-              {/* Filter Section */}
-              <View style={styles.lfgSection}>
-                <View style={styles.lfgItem}>
-                  <Ionicons name="funnel" size={24} color="#0078FF" />
-                  <Text style={styles.lfgText}>Filter</Text>
+              {/* Row 1: type filter */}
+              <View style={styles.filterRow}>
+                <View style={styles.lfgSection}>
+                  <View style={styles.lfgItem}>
+                    <Ionicons name="funnel" size={24} color="#0078FF" />
+                    <Text style={styles.lfgText}>Filter</Text>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.typeFilterRow}>
+                  {[
+                    { id: null, label: 'All' },
+                    { id: 'event', label: 'Events' },
+                    { id: 'group', label: 'Groups' },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[
+                        styles.typeFilterButton,
+                        selectedTypeFilter === opt.id && styles.typeFilterButtonActive
+                      ]}
+                      onPress={() => selectTypeFilter(opt.id)}
+                    >
+                      <Text style={[
+                        styles.typeFilterButtonText,
+                        selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
+                      ]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
 
-              <View style={styles.divider} />
-
-              {/* Event vs Group */}
-              <View style={styles.typeFilterRow}>
-                {[
-                  { id: null, label: 'All' },
-                  { id: 'event', label: 'Events' },
-                  { id: 'group', label: 'Groups' },
-                ].map((opt) => (
-                  <TouchableOpacity
-                    key={opt.label}
-                    style={[
-                      styles.typeFilterButton,
-                      selectedTypeFilter === opt.id && styles.typeFilterButtonActive
-                    ]}
-                    onPress={() => selectTypeFilter(opt.id)}
-                  >
-                    <Text style={[
-                      styles.typeFilterButtonText,
-                      selectedTypeFilter === opt.id && styles.typeFilterButtonTextActive
-                    ]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Categories */}
+              {/* Row 2: categories, full width */}
+              <View style={styles.filterRow}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -732,6 +738,7 @@ export default function SwipeScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
               </ScrollView>
+              </View>
             </TouchableOpacity>
           </Animated.View>
         </TouchableOpacity>
@@ -899,18 +906,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A0A0A', // Match navigator background
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
-    paddingTop: 15,
-    paddingBottom: 15,
-    height: Platform.OS === 'ios' ? 90 : 70, // Match navigator height
+    paddingTop: 12,
+    paddingBottom: 12,
+    height: Platform.OS === 'ios' ? 140 : 120, // Two rows: type filter + categories
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 83 : 70, // Sit just above the nav menu
     left: 0,
     right: 0,
   },
-  drawerContent: {
+  filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
+    height: '50%',
+  },
+  drawerContent: {
+    flexDirection: 'column',
     height: '100%', // Fill the drawer height
   },
   lfgSection: {

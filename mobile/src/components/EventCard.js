@@ -78,7 +78,7 @@ const TypeBadge = ({ type }) => (
   </View>
 );
 
-export default function EventCard({ event, distance, onImagePress }) {
+export default function EventCard({ event, distance, onImagePress, onExpandChange }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
@@ -88,6 +88,7 @@ export default function EventCard({ event, distance, onImagePress }) {
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
+    onExpandChange?.(next);
     Animated.timing(slideAnim, {
       toValue: next ? 1 : 0,
       duration: 250,

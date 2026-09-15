@@ -114,7 +114,7 @@ export default function EditEventScreen({ route, navigation }) {
     }
     // If event has existing image, show it
     if (event.photos && event.photos.length > 0) {
-      return { uri: event.photos[0] };
+      return { uri: event.photos[0].url };
     }
     if (formData.category && STOCK_IMAGES[formData.category]) {
       return STOCK_IMAGES[formData.category];
