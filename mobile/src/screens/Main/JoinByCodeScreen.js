@@ -37,9 +37,7 @@ export default function JoinByCodeScreen({ navigation }) {
     setLoading(true);
 
     try {
-      const response = await api.post('/events/join-by-code', {
-        code: inviteCode.trim().toUpperCase()
-      });
+      const response = await api.post(`/events/join/${inviteCode.trim().toUpperCase()}`);
 
       if (response.data.success) {
         Alert.alert(
