@@ -37,23 +37,19 @@ export default function LoginScreen() {
     }
   };
 
-  // Temporary pre-launch flow - there's no email delivery set up yet, so
-  // this hands back a working temporary password directly instead of
-  // emailing a reset link (see backend/src/routes/auth.js). Fine for now
-  // since there are no real users; needs a real email flow before launch.
   const handleForgotPassword = async (email) => {
     if (!email) {
       Alert.alert('Forgot Password', 'Enter your email above first, then tap this again.');
       return;
     }
     try {
-      const response = await api.post('/auth/forgot-password', { email });
+      await api.post('/auth/forgot-password', { email });
       Alert.alert(
-        'Temporary Password',
-        `Your temporary password is:\n\n${response.data.temporaryPassword}\n\nLog in with it, then change your password from your profile.`
+        'Check Your Email',
+        `If an account exists for ${email}, we've sent a link to reset your password. The link expires in 1 hour.`
       );
     } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to reset password');
+      Alert.alert('Error', error.response?.data?.message || 'Failed to send reset email');
     }
   };
 

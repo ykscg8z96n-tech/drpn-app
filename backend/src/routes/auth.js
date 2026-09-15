@@ -7,6 +7,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
+const { sendPasswordResetEmail } = require('../utils/email');
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -149,12 +150,9 @@ router.post('/login', authLimiter, [
 });
 
 // @route   POST /api/auth/forgot-password
-// @desc    TEMPORARY pre-launch password reset. There's no email-sending
-//          infrastructure yet, so this generates a new password and
-//          returns it directly in the response instead of emailing it -
-//          only acceptable because there are no real users yet. Revisit
-//          before real launch: a real reset must email a link, never
-//          hand back a working password in an API response.
+// @desc    Emails a time-limited reset link. Always responds with the same
+//          generic message whether or not the email matches an account, so
+//          this can't be used to enumerate registered emails.
 // @access  Public
 router.post('/forgot-password', authLimiter, [
   body('email').isEmail().normalizeEmail()
@@ -166,21 +164,57 @@ router.post('/forgot-password', authLimiter, [
     }
 
     const user = await User.findOne({ email: req.body.email });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'No account found with that email' });
-    }
+    if (user) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      user.resetPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+      user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await user.save();
 
-    const temporaryPassword = crypto.randomBytes(6).toString('hex');
-    user.password = temporaryPassword;
-    await user.save();
+      await sendPasswordResetEmail(user.email, rawToken);
+    }
 
     res.json({
       success: true,
-      temporaryPassword,
-      message: 'Use this temporary password to log in, then change it from your profile.'
+      message: 'If an account exists for that email, a reset link has been sent.'
     });
   } catch (error) {
     console.error('❌ Forgot-password error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Consumes the token emailed by /forgot-password and sets a new
+//          password.
+// @access  Public
+router.post('/reset-password', authLimiter, [
+  body('token').notEmpty(),
+  body('password').isLength({ min: 6 })
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(req.body.token).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() }
+    }).select('+resetPasswordToken +resetPasswordExpires');
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
+    }
+
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset. You can now log in.' });
+  } catch (error) {
+    console.error('❌ Reset-password error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
