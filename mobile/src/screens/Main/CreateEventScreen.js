@@ -170,31 +170,27 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
   return (
     <View style={styles.swipeContainer}>
       <View style={styles.actionButtons}>
-        {/* Show only Roster button for events user is participating in */}
-        {!item.isMyEvent ? (
-          <TouchableOpacity
-            style={styles.rosterOnlyButton}
-            onPress={() => onViewApplicants(item)}
-          >
-            <Ionicons name="people" size={24} color="white" />
-            <Text style={styles.actionButtonText}>Roster</Text>
-          </TouchableOpacity>
-        ) : (
-          /* Show all buttons for events user created */
+        {/* Roster always opens the same applicants/members view, whether
+            you organize this or just belong to it - organizers additionally
+            get a badge showing how many people are still waiting on a
+            decision, instead of a separate "Pending" button that hid the
+            roster behind it. */}
+        <TouchableOpacity
+          style={item.isMyEvent ? styles.pendingButton : styles.rosterOnlyButton}
+          onPress={() => onViewApplicants(item)}
+        >
+          <Ionicons name="people" size={24} color="white" />
+          <Text style={styles.actionButtonText}>Roster</Text>
+          {item.isMyEvent && pendingCount > 0 && (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {item.isMyEvent && (
+          /* Show the rest only for events/groups user created */
           <>
-            <TouchableOpacity
-              style={styles.pendingButton}
-              onPress={() => onViewApplicants(item)}
-            >
-              <Ionicons name="hourglass-outline" size={24} color="white" />
-              <Text style={styles.actionButtonText}>Pending</Text>
-              {pendingCount > 0 && (
-                <View style={styles.pendingBadge}>
-                  <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => onEdit(item)}

@@ -786,19 +786,20 @@ router.post('/join/:code', protect, async (req, res) => {
       });
     }
 
-    // Members of the group this event was auto-invited from join directly,
-    // first-come-first-served up to capacity - no organizer approval, unlike
-    // the pending-application path strangers go through below.
-    let isGroupMember = false;
-    if (event.inviteGroupId) {
+    // A group's own invite code joins the group directly, same as a member
+    // of the group this event was auto-invited from joins that event
+    // directly - both skip the organizer-approval path strangers go
+    // through below. Groups have no hard capacity to gate on.
+    let joinsDirectly = event.type === 'group';
+    if (!joinsDirectly && event.inviteGroupId) {
       const group = await Event.findById(event.inviteGroupId);
-      isGroupMember = !!group && (
+      joinsDirectly = !!group && (
         group.organizer.toString() === req.user.id ||
         group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
       );
     }
 
-    if (isGroupMember) {
+    if (joinsDirectly) {
       if (event.type === 'event' && event.currentAttendees >= event.capacity) {
         return res.status(400).json({ success: false, message: 'This event is full' });
       }
