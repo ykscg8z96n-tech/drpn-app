@@ -35,6 +35,68 @@ export default function PrivateChatScreen({ route, navigation }) {
   const [otherUserData, setOtherUserData] = useState(otherUser || null);
   const [chatRoomId, setChatRoomId] = useState(null);
   const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'accepting' | 'accepted' | 'declined'
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  const reportReasons = [
+    { label: 'Harassment', value: 'harassment' },
+    { label: 'Spam', value: 'spam' },
+    { label: 'Inappropriate content', value: 'inappropriate_content' },
+    { label: 'Safety concern', value: 'safety_concern' },
+    { label: 'Other', value: 'other' },
+  ];
+
+  const submitReport = async (reason) => {
+    try {
+      await api.post('/reports', {
+        reportedUserId: otherUserData?._id || otherUserData?.id,
+        reason,
+        context: 'private_chat',
+        contextId: connectionId,
+      });
+      Alert.alert('Report Submitted', 'Thanks for letting us know. Our team will review this.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to submit report');
+    }
+  };
+
+  const handleReport = () => {
+    Alert.alert(
+      'Report User',
+      'What\'s the issue?',
+      [
+        ...reportReasons.map(r => ({ text: r.label, onPress: () => submitReport(r.value) })),
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleToggleBlock = async () => {
+    try {
+      if (isBlocked) {
+        await api.delete(`/private-connections/${connectionId}/block`);
+        setIsBlocked(false);
+        Alert.alert('Unblocked', `You've unblocked ${otherUserData?.name || 'this user'}.`);
+      } else {
+        await api.post(`/private-connections/${connectionId}/block`);
+        setIsBlocked(true);
+        Alert.alert('Blocked', `You've blocked ${otherUserData?.name || 'this user'}. They can no longer message you.`);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update block status');
+    }
+  };
+
+  const handleOpenOptions = () => {
+    Alert.alert(
+      otherUserData?.name || 'Chat Options',
+      undefined,
+      [
+        { text: isBlocked ? 'Unblock User' : 'Block User', onPress: handleToggleBlock, style: isBlocked ? 'default' : 'destructive' },
+        { text: 'Report User', onPress: handleReport, style: 'destructive' },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
 
   const flatListRef = useRef(null);
 
@@ -93,6 +155,12 @@ export default function PrivateChatScreen({ route, navigation }) {
         const loadedMessages = messagesResponse.data.data || [];
         if (messagesResponse.data.chatInfo?.chatRoomId) {
           setChatRoomId(messagesResponse.data.chatInfo.chatRoomId);
+        }
+        if (typeof messagesResponse.data.chatInfo?.isBlocked === 'boolean') {
+          setIsBlocked(messagesResponse.data.chatInfo.isBlocked);
+        }
+        if (messagesResponse.data.chatInfo?.otherUser?._id) {
+          setOtherUserData(prev => ({ ...prev, ...messagesResponse.data.chatInfo.otherUser }));
         }
 
         // For iPhone style, newest messages at bottom (traditional chat order)
@@ -172,12 +240,20 @@ export default function PrivateChatScreen({ route, navigation }) {
           </Text>
         </View>
       ),
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerOptionsButton}
+          onPress={handleOpenOptions}
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+      ),
       headerStyle: {
         backgroundColor: '#000000',
       },
       headerTintColor: '#FFFFFF',
     });
-  }, [navigation, otherUserData]);
+  }, [navigation, otherUserData, isBlocked]);
 
   // Load messages on focus
   useFocusEffect(
@@ -657,6 +733,10 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     maxWidth: 180,
+  },
+  headerOptionsButton: {
+    padding: 4,
+    marginRight: -4,
   },
 
   // Loading & Error States
