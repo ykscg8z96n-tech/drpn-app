@@ -47,6 +47,7 @@ export function installMockApi(api) {
     return ok({ _id: `event-${Date.now()}`, organizer: mockUser, photos: [], applicants: [], currentAttendees: 0, currentMembers: 0, isArchived: false, ...body });
   });
   mock.onPost(/\/events\/[\w-]+\/decide$/).reply(() => ok({ decided: true }));
+  mock.onPost(/\/events\/[\w-]+\/invite$/).reply(() => ok({ inviteCode: 'DEMO123' }));
   mock.onPost(/\/events\/[\w-]+\/photos$/).reply(() => ok([]));
   mock.onDelete(/\/events\/[\w-]+\/photos\/[\w-]+$/).reply(() => ok([]));
   mock.onGet(/\/events\/[\w-]+$/).reply((config) => ok(findEvent(config.url.split('/').pop())));
