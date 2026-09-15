@@ -36,25 +36,29 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef(null);
 
-  // Seed from whatever's already applied, or the device's live location.
+  // Seed state AND mount the Leaflet map in one effect, both from props
+  // directly rather than from `center` state - reading state set by a
+  // separate effect on the same render pass doesn't work here, since by
+  // the time that state actually lands, [visible] (this effect's only
+  // real dependency) hasn't changed again, so React would never re-run
+  // this effect and the map would never be created.
   useEffect(() => {
     if (!visible) return;
-    if (initialLocation) {
-      setCenter({ lat: initialLocation.latitude, lng: initialLocation.longitude });
-      setLabel(initialLocation.label || '');
-      setRadiusKm(initialLocation.radiusKm || DEFAULT_RADIUS_KM);
-    } else if (deviceLocation) {
-      setCenter({ lat: deviceLocation.latitude, lng: deviceLocation.longitude });
-      setLabel('');
-      setRadiusKm(DEFAULT_RADIUS_KM);
-    }
+
+    const seed = initialLocation
+      ? { lat: initialLocation.latitude, lng: initialLocation.longitude }
+      : deviceLocation
+        ? { lat: deviceLocation.latitude, lng: deviceLocation.longitude }
+        : null;
+    const seedRadius = initialLocation?.radiusKm || DEFAULT_RADIUS_KM;
+
+    setCenter(seed);
+    setLabel(initialLocation?.label || '');
+    setRadiusKm(seedRadius);
     setQuery('');
     setSuggestions([]);
-  }, [visible, initialLocation, deviceLocation]);
 
-  // Mount/tear down the Leaflet map alongside the modal itself.
-  useEffect(() => {
-    if (!visible || !center || !mapContainerRef.current) return;
+    if (!seed || !mapContainerRef.current) return;
 
     ensureLeafletCss();
     let cancelled = false;
@@ -64,7 +68,7 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
       leafletRef.current = L;
 
       const map = L.map(mapContainerRef.current, {
-        center: [center.lat, center.lng],
+        center: [seed.lat, seed.lng],
         zoom: 9,
         zoomControl: true,
       });
@@ -73,9 +77,9 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
         maxZoom: 18,
       }).addTo(map);
 
-      const marker = L.marker([center.lat, center.lng]).addTo(map);
-      const circle = L.circle([center.lat, center.lng], {
-        radius: radiusKm * 1000,
+      const marker = L.marker([seed.lat, seed.lng]).addTo(map);
+      const circle = L.circle([seed.lat, seed.lng], {
+        radius: seedRadius * 1000,
         color: '#0078FF',
         fillColor: '#0078FF',
         fillOpacity: 0.15,
@@ -92,6 +96,12 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
       mapRef.current = map;
       markerRef.current = marker;
       circleRef.current = circle;
+
+      // The container's final flex-computed size can land a frame after
+      // Leaflet reads it, especially right as the modal's slide-in
+      // animation starts - without this it sometimes initializes against
+      // a 0-height container and renders blank until the window resizes.
+      requestAnimationFrame(() => map.invalidateSize());
     });
 
     return () => {
