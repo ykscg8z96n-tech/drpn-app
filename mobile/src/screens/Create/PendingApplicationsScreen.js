@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import ProfilePreviewCard from '../../components/ProfilePreviewCard';
 
 const { width } = Dimensions.get('window');
 
@@ -445,30 +446,8 @@ export default function PendingApplicationsScreen({ route, navigation }) {
           onPress={() => setViewingProfile(null)}
         >
           <TouchableOpacity style={styles.profileModalSheet} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            {viewingProfile?.photos && viewingProfile.photos.length > 0 ? (
-              <Image
-                source={{ uri: viewingProfile.photos[0].url || viewingProfile.photos[0] }}
-                style={styles.profileModalPhoto}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.profileModalPhotoPlaceholder}>
-                <Text style={styles.profileModalInitials}>
-                  {(viewingProfile?.name || '?').split(' ').map(n => n[0]).join('').toUpperCase()}
-                </Text>
-              </View>
-            )}
-
-            <ScrollView style={styles.profileModalInfo}>
-              <Text style={styles.profileModalName}>{viewingProfile?.name}</Text>
-              {viewingProfile?.age && (
-                <Text style={styles.profileModalAge}>Age {viewingProfile.age}</Text>
-              )}
-              {viewingProfile?.bio ? (
-                <Text style={styles.profileModalBio}>{viewingProfile.bio}</Text>
-              ) : (
-                <Text style={styles.profileModalBioEmpty}>No bio yet</Text>
-              )}
+            <ScrollView bounces={false}>
+              <ProfilePreviewCard profile={viewingProfile} />
             </ScrollView>
 
             <TouchableOpacity style={styles.profileModalClose} onPress={() => setViewingProfile(null)}>
@@ -745,46 +724,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: 'hidden',
-  },
-  profileModalPhoto: {
-    width: '100%',
-    height: 280,
-  },
-  profileModalPhotoPlaceholder: {
-    width: '100%',
-    height: 280,
-    backgroundColor: '#1A1A1A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileModalInitials: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#666666',
-  },
-  profileModalInfo: {
-    padding: 20,
-  },
-  profileModalName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  profileModalAge: {
-    fontSize: 16,
-    color: '#999999',
-    marginBottom: 12,
-  },
-  profileModalBio: {
-    fontSize: 16,
-    color: '#CCCCCC',
-    lineHeight: 22,
-  },
-  profileModalBioEmpty: {
-    fontSize: 16,
-    color: '#666666',
-    fontStyle: 'italic',
   },
   profileModalClose: {
     position: 'absolute',
