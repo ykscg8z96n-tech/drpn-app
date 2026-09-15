@@ -6,6 +6,7 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
+const ChatCounter = require('../models/ChatCounter');
 const Participation = require('../models/Participation');
 const { getBotUserId } = require('../services/botUser');
 const { protect, organizer, premium } = require('../middleware/auth');
@@ -352,20 +353,40 @@ router.post('/', [protect,
       console.log('👤 Updated user to organizer status');
     }
 
-    // Drop the join code straight into the group's chat so members see it
-    // and can join - group members join directly (see
-    // POST /:id/join-group-invite) instead of applying like strangers.
+    // Drop a clickable event-invite card into the group's chat so members
+    // can see it and join with one tap (POST /:id/quick-join) - group
+    // members join directly instead of applying like strangers.
     if (inviteGroup) {
       try {
         const inviteCode = event.generateInviteCode(req.user.id);
         await event.save();
 
-        const chatMessage = await Message.createEventMessage(
-          inviteGroup._id,
-          req.user.id,
-          `🎟️ New event "${event.name}" - join with code ${inviteCode}`,
-          'group'
-        );
+        const groupChatId = `group-${inviteGroup._id}`;
+        const seq = await ChatCounter.nextSeq(groupChatId);
+        const chatMessage = await Message.create({
+          chatType: 'group',
+          chatId: groupChatId,
+          event: inviteGroup._id,
+          sender: req.user.id,
+          text: `New event "${event.name}" - tap to view and join`,
+          messageType: 'system',
+          systemMessage: {
+            type: 'event_invite',
+            data: {
+              eventId: event._id,
+              eventName: event.name,
+              category: event.category,
+              eventDate: event.eventDate,
+              location: event.location,
+              capacity: event.capacity,
+              currentAttendees: event.currentAttendees,
+              inviteCode
+            }
+          },
+          seq
+        });
+        await chatMessage.populate('sender', 'name photos');
+
         const io = req.app.get('io');
         if (io) {
           io.to(`${chatMessage.chatType}:${chatMessage.chatId}`).emit('message:new', chatMessage);
@@ -811,6 +832,76 @@ router.post('/:id/invite', protect, async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/quick-join
+// @desc    Accept an event_invite chat card - join immediately, no code
+//          needed since group membership itself is the authorization
+//          (mirrors the joinsDirectly branch of POST /join/:code).
+// @access  Private
+router.post('/:id/quick-join', protect, async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+
+    if (!event.inviteGroupId) {
+      return res.status(403).json({ success: false, message: 'This event has no group invite to accept' });
+    }
+
+    const group = await Event.findById(event.inviteGroupId);
+    const isGroupMember = !!group && (
+      group.organizer.toString() === req.user.id
+      || group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
+    );
+    if (!isGroupMember) {
+      return res.status(403).json({ success: false, message: 'Not a member of this group' });
+    }
+
+    if (event.hasUserApplied(req.user.id)) {
+      return res.status(400).json({ success: false, message: 'You have already joined this event' });
+    }
+
+    if (event.type === 'event' && event.currentAttendees >= event.capacity) {
+      return res.status(400).json({ success: false, message: 'This event is now full' });
+    }
+
+    event.applicants.push({
+      userId: req.user.id,
+      status: 'accepted',
+      respondedAt: new Date()
+    });
+    event.currentAttendees = (event.currentAttendees || 0) + 1;
+    event.closeIfFull();
+    const justBecameFull = event.type === 'event' && event.currentAttendees >= event.capacity;
+    await event.save();
+
+    await notifyGroupIfJustFilled(event, req, justBecameFull);
+
+    const existingMatch = await Match.findOne({ individual: req.user.id, event: event._id });
+    if (!existingMatch) {
+      await Match.create({
+        individual: req.user.id,
+        event: event._id,
+        status: 'active',
+        matchedAt: new Date()
+      });
+    }
+    await recordParticipation(event, req.user.id, 'invite_code');
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { eventsJoined: { eventId: event._id, status: 'accepted' } }
+    });
+
+    res.json({
+      success: true,
+      data: { eventName: event.name, eventType: event.type },
+      message: `Joined ${event.name}!`
+    });
+  } catch (error) {
+    console.error('Error in quick-join:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
