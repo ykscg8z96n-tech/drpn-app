@@ -195,26 +195,19 @@ export default function PendingApplicationsScreen({ route, navigation }) {
             applicationId: app._id
           }));
         
-        // Add organizer to accepted users (if not already there)
-        const organizerInAccepted = accepted.find(u => u._id === event.organizer || u._id === event.organizer?._id);
-        if (!organizerInAccepted && event.organizer) {
-          // Get organizer info
-          try {
-            let organizerData;
-            if (typeof event.organizer === 'object' && event.organizer.name) {
-              organizerData = event.organizer;
-            } else {
-              const organizerResponse = await api.get(`/users/${event.organizer._id || event.organizer}`);
-              organizerData = organizerResponse.data.data;
-            }
-            
-            accepted.unshift({
-              ...organizerData,
-              isEventOrganizer: true
-            });
-          } catch (orgError) {
-            console.log('Could not fetch organizer info:', orgError.message);
-          }
+        // Add organizer to accepted users (if not already there). Uses
+        // eventData.organizer - the just-fetched, fully populated one
+        // (name/photos/bio/age) - not the route param `event` prop, which
+        // only ever carries whatever the list screen it came from
+        // populated (name/photos), so bio/age were always blank here
+        // even for a full profile.
+        const organizerId = eventData.organizer?._id || eventData.organizer;
+        const organizerInAccepted = accepted.find(u => u._id === organizerId);
+        if (!organizerInAccepted && eventData.organizer) {
+          accepted.unshift({
+            ...eventData.organizer,
+            isEventOrganizer: true
+          });
         }
         
         console.log('👥 Pending users:', pending.length);
