@@ -33,6 +33,7 @@ router.get('/profile', protect, async (req, res) => {
 router.put('/profile', [protect,
   body('name').optional().trim().isLength({ min: 1, max: 100 }),
   body('bio').optional().trim().isLength({ max: 500 }),
+  body('birthDate').optional().isISO8601().toDate(),
   body('isOrganizer').optional().isBoolean()
 ], async (req, res) => {
   try {
@@ -42,13 +43,25 @@ router.put('/profile', [protect,
     }
 
     const updateFields = {};
-    const allowedFields = ['name', 'bio', 'searchRadius', 'isOrganizer'];
-    
+    const allowedFields = ['name', 'bio', 'birthDate', 'searchRadius', 'isOrganizer'];
+
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
         updateFields[field] = req.body[field];
       }
     });
+
+    // If birthDate is provided, also calculate and update age
+    if (req.body.birthDate) {
+      const today = new Date();
+      const birth = new Date(req.body.birthDate);
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      updateFields.age = age;
+    }
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -485,55 +498,6 @@ router.delete('/block/:userId', protect, async (req, res) => {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
-// @route   PUT /api/users/profile
-// @desc    Update user profile
-// @access  Private
-router.put('/profile', [protect,
-  body('name').optional().trim().isLength({ min: 1, max: 100 }),
-  body('bio').optional().trim().isLength({ max: 500 }),
-  body('birthDate').optional().isISO8601().toDate(), // Add this line
-  body('isOrganizer').optional().isBoolean()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const updateFields = {};
-    const allowedFields = ['name', 'bio', 'birthDate', 'searchRadius', 'isOrganizer']; // Add birthDate here
-    
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        updateFields[field] = req.body[field];
-      }
-    });
-
-    // If birthDate is provided, also calculate and update age
-    if (req.body.birthDate) {
-      const today = new Date();
-      const birth = new Date(req.body.birthDate);
-      let age = today.getFullYear() - birth.getFullYear();
-      const monthDiff = today.getMonth() - birth.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-        age--;
-      }
-      updateFields.age = age;
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    res.json({ success: true, data: user });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
 });
-});
-
 
 module.exports = router;

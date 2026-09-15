@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import WebDateInput from '../../components/WebDateInput';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -61,7 +62,8 @@ export default function CreateNewScreen({ route, navigation }) {
      state: '',
     coordinates: [0, 0],
    },
-   category: '',                                     // single category
+   category: '',                                     // primary category (always categories[0])
+   categories: [],                                   // groups can pick more than one; events stay single
    capacity:   type === 'event' ? '' : undefined,    // only for events
    eventDate:  type === 'event' ? new Date() : undefined,
    groupSize:  type === 'group' ? '' : undefined,    // only for groups
@@ -219,35 +221,56 @@ export default function CreateNewScreen({ route, navigation }) {
     }
   };
 
+  const toggleCategory = (id) => {
+    if (type === 'group') {
+      // Groups can belong to more than one category.
+      setFormData(prev => {
+        const current = prev.categories || [];
+        const next = current.includes(id)
+          ? current.filter(c => c !== id)
+          : [...current, id];
+        return { ...prev, categories: next, category: next[0] || '' };
+      });
+    } else {
+      // Events stay single-category.
+      setFormData(prev => ({ ...prev, category: id, categories: [id] }));
+    }
+  };
+
   const renderCategories = () => (
     <View style={styles.categoryContainer}>
-      {CATEGORIES.map((category) => (
-        <TouchableOpacity
-          key={category.id}
-          style={[
-            styles.categoryTag,
-            { borderColor: category.color },
-            formData.category === category.id && { 
-              backgroundColor: category.color,
-              borderColor: category.color 
-            }
-          ]}
-          onPress={() => setFormData({ ...formData, category: category.id })}
-        >
-          <Ionicons 
-            name={category.icon} 
-            size={16} 
-            color={formData.category === category.id ? '#FFFFFF' : category.color}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[
-            styles.categoryTagText,
-            formData.category === category.id && styles.categoryTagTextActive
-          ]}>
-            {category.name}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      {CATEGORIES.map((category) => {
+        const isActive = type === 'group'
+          ? formData.categories.includes(category.id)
+          : formData.category === category.id;
+        return (
+          <TouchableOpacity
+            key={category.id}
+            style={[
+              styles.categoryTag,
+              { borderColor: category.color },
+              isActive && {
+                backgroundColor: category.color,
+                borderColor: category.color
+              }
+            ]}
+            onPress={() => toggleCategory(category.id)}
+          >
+            <Ionicons
+              name={category.icon}
+              size={16}
+              color={isActive ? '#FFFFFF' : category.color}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[
+              styles.categoryTagText,
+              isActive && styles.categoryTagTextActive
+            ]}>
+              {category.name}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 
@@ -393,6 +416,9 @@ export default function CreateNewScreen({ route, navigation }) {
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Category</Text>
+            {type === 'group' && (
+              <Text style={styles.helperText}>Select one or more categories</Text>
+            )}
             {renderCategories()}
           </View>
 
@@ -401,7 +427,17 @@ export default function CreateNewScreen({ route, navigation }) {
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Event Date</Text>
                 <View style={styles.datePickerWrapper}>
-                  {Platform.OS === 'ios' ? (
+                  {Platform.OS === 'web' ? (
+                    <WebDateInput
+                      value={formData.eventDate.toISOString().split('T')[0]}
+                      onChange={(dateString) => {
+                        if (dateString) {
+                          setFormData({ ...formData, eventDate: new Date(`${dateString}T00:00:00`) });
+                        }
+                      }}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  ) : Platform.OS === 'ios' ? (
                     <DateTimePicker
                       value={formData.eventDate}
                       mode="date"

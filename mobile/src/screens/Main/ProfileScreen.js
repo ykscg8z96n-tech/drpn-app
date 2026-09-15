@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import WebDateInput from '../../components/WebDateInput';
 
 const { width, height } = Dimensions.get('window');
 
@@ -267,7 +268,10 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const startEditingBirthday = () => {
-    setTempBirthday(profile?.birthDate || '');
+    // <input type="date"> (used on web) only accepts an exact
+    // 'YYYY-MM-DD' string, but profile.birthDate comes back from the API
+    // as a full ISO timestamp - trim it down.
+    setTempBirthday(profile?.birthDate ? profile.birthDate.split('T')[0] : '');
     setEditingBirthday(true);
   };
 
@@ -552,14 +556,22 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="calendar-outline" size={20} color="#666666" />
             <View style={styles.inputContainer}>
               {editingBirthday ? (
-                <TextInput
-                  style={styles.fieldValue}
-                  value={tempBirthday}
-                  onChangeText={setTempBirthday}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#666666"
-                  autoFocus
-                />
+                Platform.OS === 'web' ? (
+                  <WebDateInput
+                    value={tempBirthday}
+                    onChange={setTempBirthday}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                ) : (
+                  <TextInput
+                    style={styles.fieldValue}
+                    value={tempBirthday}
+                    onChangeText={setTempBirthday}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#666666"
+                    autoFocus
+                  />
+                )
               ) : (
                 <Text style={styles.fieldValue}>
                   {profile?.birthDate
