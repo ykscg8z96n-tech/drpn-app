@@ -156,14 +156,11 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   };
 
   const getCapacityInfo = () => {
+    const current = event.currentAttendees || 0;
     if (event.type === 'event') {
-      const current = event.currentAttendees || 0;
-      const max = event.capacity || 0;
-      return `${current}/${max}`;
+      return `${current}/${event.capacity || 0}`;
     } else if (event.type === 'group') {
-      const current = event.currentMembers || 0;
-      const max = event.groupSize || 0;
-      return `${current}/${max}`;
+      return `${current}/${event.groupSize || 0}`;
     }
     return '';
   };

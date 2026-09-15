@@ -166,7 +166,7 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
   const applicants = item.applicants || [];
   const pendingCount = item.pendingApplications?.length ?? applicants.filter(a => a.status === 'pending').length;
   const acceptedCount = item.acceptedApplications?.length
-    ?? (item.type === 'group' ? item.currentMembers : item.currentAttendees)
+    ?? item.currentAttendees
     ?? applicants.filter(a => a.status === 'accepted').length;
   const isPastEvent = item.type === 'event' && new Date(item.eventDate) < new Date();
 
