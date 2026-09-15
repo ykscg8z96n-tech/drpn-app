@@ -130,10 +130,13 @@ router.get('/nearby', protect, async (req, res) => {
       console.warn('⚠️ Failed to get user swipes:', userError.message);
     }
     
-    // Build query
+    // Build query - private events/groups ("only people with invite codes
+    // can join") are deliberately excluded from public discovery; they're
+    // only reachable via their invite code.
     const query = {
       isActive: true,
       isArchived: { $ne: true },
+      isPublic: true,
       organizer: { $ne: req.user.id }
     };
     
