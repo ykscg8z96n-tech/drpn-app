@@ -19,7 +19,6 @@ import EditEventScreen from '../screens/Create/EditEventScreen';
 import PendingApplicationsScreen from '../screens/Create/PendingApplicationsScreen';
 import JoinByCodeScreen from '../screens/Main/JoinByCodeScreen';
 import PrivateChatScreen from '../screens/Chat/PrivateChatScreen';
-import MyApplicationsScreen from '../screens/Main/MyApplicationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -215,11 +214,6 @@ function ProfileStack() {
         name="ProfileMain"
         component={ProfileScreen}
         options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="MyApplications"
-        component={MyApplicationsScreen}
-        options={{ title: 'My Applications', headerBackTitleVisible: false }}
       />
     </Stack.Navigator>
   );

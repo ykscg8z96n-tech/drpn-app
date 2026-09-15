@@ -16,11 +16,13 @@ import {
   Dimensions,
   Platform,
   Share,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import EventCard from '../../components/EventCard';
 
 const { width } = Dimensions.get('window');
 
@@ -98,7 +100,7 @@ const getEventDisplayImage = (item) => {
 };
 
 // Swipeable Event Item Component - KEEPING ORIGINAL IMPLEMENTATION
-const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvite, onScrollEnabled, playHint, onHintPlayed }) => {
+const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvite, onWithdraw, onViewDetails, onScrollEnabled, playHint, onHintPlayed }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [isRevealed, setIsRevealed] = useState(false);
 
@@ -171,52 +173,66 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
   return (
     <View style={styles.swipeContainer}>
       <View style={styles.actionButtons}>
-        {/* Roster always opens the same applicants/members view, whether
-            you organize this or just belong to it - organizers additionally
-            get a badge showing how many people are still waiting on a
-            decision, instead of a separate "Pending" button that hid the
-            roster behind it. */}
-        <TouchableOpacity
-          style={item.isMyEvent ? styles.pendingButton : styles.rosterOnlyButton}
-          onPress={() => onViewApplicants(item)}
-        >
-          <Ionicons name="people" size={24} color="white" />
-          <Text style={styles.actionButtonText}>Roster</Text>
-          {item.isMyEvent && pendingCount > 0 && (
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {item.isMyEvent && (
-          /* Show the rest only for events/groups user created */
+        {item.isPendingApplication ? (
+          /* A pending application isn't yours to manage - swiping it
+             over only offers backing out of it. */
+          <TouchableOpacity
+            style={styles.withdrawButton}
+            onPress={() => onWithdraw(item)}
+          >
+            <Ionicons name="close-circle-outline" size={24} color="white" />
+            <Text style={styles.actionButtonText}>Withdraw</Text>
+          </TouchableOpacity>
+        ) : (
           <>
+            {/* Roster always opens the same applicants/members view, whether
+                you organize this or just belong to it - organizers additionally
+                get a badge showing how many people are still waiting on a
+                decision, instead of a separate "Pending" button that hid the
+                roster behind it. */}
             <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => onEdit(item)}
+              style={item.isMyEvent ? styles.pendingButton : styles.rosterOnlyButton}
+              onPress={() => onViewApplicants(item)}
             >
-              <Ionicons name="create-outline" size={24} color="white" />
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Ionicons name="people" size={24} color="white" />
+              <Text style={styles.actionButtonText}>Roster</Text>
+              {item.isMyEvent && pendingCount > 0 && (
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
-            {item.type === 'group' && (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => onInvite(item)}
-              >
-                <Ionicons name="person-add-outline" size={24} color="white" />
-                <Text style={styles.actionButtonText}>Invite</Text>
-              </TouchableOpacity>
+            {item.isMyEvent && (
+              /* Show the rest only for events/groups user created */
+              <>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => onEdit(item)}
+                >
+                  <Ionicons name="create-outline" size={24} color="white" />
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+
+                {item.type === 'group' && (
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => onInvite(item)}
+                  >
+                    <Ionicons name="person-add-outline" size={24} color="white" />
+                    <Text style={styles.actionButtonText}>Invite</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.archiveButton}
+                  onPress={() => onArchive(item)}
+                >
+                  <Ionicons name="archive-outline" size={24} color="white" />
+                  <Text style={styles.archiveButtonText}>Archive</Text>
+                </TouchableOpacity>
+              </>
             )}
-
-            <TouchableOpacity
-              style={styles.archiveButton}
-              onPress={() => onArchive(item)}
-            >
-              <Ionicons name="archive-outline" size={24} color="white" />
-              <Text style={styles.archiveButtonText}>Archive</Text>
-            </TouchableOpacity>
           </>
         )}
       </View>
@@ -230,7 +246,11 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
         ]}
         {...panResponder.panHandlers}
       >
-        <View style={styles.eventItem}>
+        <TouchableOpacity
+          style={styles.eventItem}
+          activeOpacity={0.8}
+          onPress={() => onViewDetails(item)}
+        >
           <View style={styles.eventHeader}>
             {/* Left Section - Photo and Capacity with proper spacing */}
             <View style={styles.leftSection}>
@@ -310,7 +330,7 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -323,6 +343,8 @@ export default function CreateEventScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [swipeHintPlayed, setSwipeHintPlayed] = useState(false);
+  const [pendingApplications, setPendingApplications] = useState([]);
+  const [detailEvent, setDetailEvent] = useState(null);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -337,6 +359,7 @@ export default function CreateEventScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       loadMyEvents();
+      loadPendingApplications();
     }, [])
   );
 
@@ -399,10 +422,51 @@ export default function CreateEventScreen({ navigation }) {
     }
   };
 
+  const loadPendingApplications = async () => {
+    try {
+      const response = await api.get('/users/my-applications');
+      const pending = (response.data.data || [])
+        .filter(app => app.status === 'pending')
+        .map(app => ({ ...app.event, isPendingApplication: true }));
+      setPendingApplications(pending);
+    } catch (error) {
+      console.error('Error loading pending applications:', error);
+      setPendingApplications([]);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadMyEvents();
+    await loadPendingApplications();
     setRefreshing(false);
+  };
+
+  const handleWithdraw = (event) => {
+    Alert.alert(
+      'Withdraw Application',
+      `Are you sure you want to withdraw your application for "${event.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/users/my-applications/${event._id}`);
+              setPendingApplications(prev => prev.filter(e => e._id !== event._id));
+              Alert.alert('Success', 'Application withdrawn');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to withdraw application');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleViewDetails = (event) => {
+    setDetailEvent(event);
   };
 
   const handleScrollEnabled = (enabled) => {
@@ -478,12 +542,19 @@ export default function CreateEventScreen({ navigation }) {
   };
 
   const getFilteredEvents = () => {
-    if (activeTab === 'Events') {
-      return myEvents.filter(event => event.type === 'event');
-    } else if (activeTab === 'Groups') {
-      return myEvents.filter(event => event.type === 'group');
+    const type = activeTab === 'Events' ? 'event' : 'group';
+    const items = myEvents.filter(event => event.type === type);
+    const pending = pendingApplications.filter(event => event.type === type);
+
+    if (pending.length === 0) {
+      return items;
     }
-    return myEvents;
+
+    return [
+      ...items,
+      { _id: 'pending-section-header', isSectionHeader: true, sectionTitle: 'Pending' },
+      ...pending,
+    ];
   };
 
   const renderTabBar = () => {
@@ -589,16 +660,22 @@ export default function CreateEventScreen({ navigation }) {
             data={filteredEvents}
             keyExtractor={(item) => item._id}
             renderItem={({ item, index }) => (
-              <SwipeableEventItem
-                item={item}
-                onArchive={handleArchiveEvent}
-                onEdit={handleEditEvent}
-                onViewApplicants={handleViewApplicants}
-                onInvite={handleInviteGroup}
-                onScrollEnabled={handleScrollEnabled}
-                playHint={index === 0 && !swipeHintPlayed}
-                onHintPlayed={() => setSwipeHintPlayed(true)}
-              />
+              item.isSectionHeader ? (
+                <Text style={styles.sectionHeaderText}>{item.sectionTitle}</Text>
+              ) : (
+                <SwipeableEventItem
+                  item={item}
+                  onArchive={handleArchiveEvent}
+                  onEdit={handleEditEvent}
+                  onViewApplicants={handleViewApplicants}
+                  onInvite={handleInviteGroup}
+                  onWithdraw={handleWithdraw}
+                  onViewDetails={handleViewDetails}
+                  onScrollEnabled={handleScrollEnabled}
+                  playHint={index === 0 && !swipeHintPlayed}
+                  onHintPlayed={() => setSwipeHintPlayed(true)}
+                />
+              )
             )}
             refreshControl={
               <RefreshControl
@@ -614,6 +691,22 @@ export default function CreateEventScreen({ navigation }) {
           />
         )}
       </View>
+
+      <Modal
+        visible={!!detailEvent}
+        animationType="slide"
+        onRequestClose={() => setDetailEvent(null)}
+      >
+        <View style={styles.detailModalContainer}>
+          <TouchableOpacity
+            style={[styles.detailCloseButton, { top: insets.top + 12 }]}
+            onPress={() => setDetailEvent(null)}
+          >
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          {detailEvent && <EventCard event={detailEvent} />}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -709,6 +802,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  withdrawButton: {
+    backgroundColor: '#FF3B30',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 240,
   },
   actionButtonText: {
     color: 'white',
@@ -948,5 +1048,32 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Pending Section Header
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#999999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 8,
+    backgroundColor: '#000000',
+  },
+
+  // Event/Group Detail Modal
+  detailModalContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  detailCloseButton: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 6,
   },
 });
