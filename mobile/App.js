@@ -1,12 +1,25 @@
 // mobile/App.js
 import './src/utils/webAlertPolyfill';
 import React, { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SocketProvider } from './src/contexts/SocketContext';
+
+// The page's own background (html/body) is white by default - Expo's web
+// reset only sets height, not color. Every screen paints its own dark
+// background, but any sliver that isn't covered (a stray gap from a
+// Modal's fixed-position overlay animating, a transform-related rendering
+// seam, a momentary viewport shift) shows that white through instead of
+// blending in. Setting it once here means any such gap reads as "part of
+// the dark UI" instead of a visible white/light line at the edge.
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  document.documentElement.style.backgroundColor = '#000000';
+  document.body.style.backgroundColor = '#000000';
+}
 
 // Screens
 import SplashScreen from './src/screens/SplashScreen';
