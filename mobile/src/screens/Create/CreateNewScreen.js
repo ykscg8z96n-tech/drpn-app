@@ -22,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { uploadEventPhoto } from '../../utils/uploadEventPhoto';
 import GroupMultiSelect from '../../components/GroupMultiSelect';
+import AddressAutocompleteInput from '../../components/AddressAutocompleteInput';
 
 // 6 mutually exclusive categories - REMOVED INTERESTS COMPLETELY
 const CATEGORIES = [
@@ -384,46 +385,55 @@ export default function CreateNewScreen({ route, navigation }) {
               Enter the full address for your {type}. Only city and state will be shown publicly.
             </Text>
             
-            <View style={styles.addressInputContainer}>
-              <Ionicons name="location-outline" size={20} color="#0078FF" />
-              <TextInput
-                style={styles.addressInput}
-                value={formData.location.fullAddress || formData.location.address}
-                onChangeText={(text) => {
-                  // Extract city and state from full address if possible
-                  const parts = text.split(',').map(p => p.trim());
-                  let city = '', state = '';
-                  
-                  if (parts.length >= 2) {
-                    // Try to identify city and state from the address
-                    const lastPart = parts[parts.length - 1];
-                    const secondLastPart = parts[parts.length - 2];
-                    
-                    // If last part looks like a state/province (2-3 characters)
-                    if (lastPart.length <= 3) {
-                      state = lastPart;
-                      city = secondLastPart;
-                    } else {
-                      city = lastPart;
-                    }
+            <AddressAutocompleteInput
+              value={formData.location.fullAddress || formData.location.address}
+              placeholder="Enter full address (e.g., 123 Main St, Toronto, ON)"
+              onChangeText={(text) => {
+                // Manual typing without picking a suggestion - keep the old
+                // best-effort city/state parse as a fallback so submitting
+                // without ever opening the dropdown still works, but this
+                // path never has real coordinates for the typed address.
+                const parts = text.split(',').map(p => p.trim());
+                let city = '', state = '';
+
+                if (parts.length >= 2) {
+                  const lastPart = parts[parts.length - 1];
+                  const secondLastPart = parts[parts.length - 2];
+
+                  if (lastPart.length <= 3) {
+                    state = lastPart;
+                    city = secondLastPart;
+                  } else {
+                    city = lastPart;
                   }
-                  
-                  setFormData({ 
-                    ...formData, 
-                    location: { 
-                      ...formData.location, 
-                      fullAddress: text,
-                      address: city && state ? `${city}, ${state}` : text,
-                      city: city,
-                      state: state
-                    }
-                  });
-                }}
-                placeholder="Enter full address (e.g., 123 Main St, Toronto, ON)"
-                placeholderTextColor="#666"
-              />
-            </View>
-            
+                }
+
+                setFormData({
+                  ...formData,
+                  location: {
+                    ...formData.location,
+                    fullAddress: text,
+                    address: city && state ? `${city}, ${state}` : text,
+                    city: city,
+                    state: state
+                  }
+                });
+              }}
+              onSelectPlace={(place) => {
+                setFormData({
+                  ...formData,
+                  location: {
+                    ...formData.location,
+                    fullAddress: place.fullAddress,
+                    address: place.address,
+                    city: place.city,
+                    state: place.state,
+                    coordinates: place.coordinates
+                  }
+                });
+              }}
+            />
+
             {formData.location.city && formData.location.state && (
               <View style={styles.locationPreview}>
                 <Ionicons name="eye-outline" size={16} color="#0078FF" />
