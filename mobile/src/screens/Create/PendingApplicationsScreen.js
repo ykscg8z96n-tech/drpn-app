@@ -313,9 +313,9 @@ export default function PendingApplicationsScreen({ route, navigation }) {
             text: 'Send Invite',
             onPress: async () => {
               try {
-                const response = await api.post('/connections/invite', {
-                  otherUserId: userData._id,
-                  eventId: event._id,
+                const response = await api.post('/private-connections/invite', {
+                  toUserId: userData._id,
+                  originEventId: event._id,
                   message: `Hi ${userData.name}! I'd love to chat privately after meeting at ${event.name}.`
                 });
 
