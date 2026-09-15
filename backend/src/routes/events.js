@@ -6,6 +6,7 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
+const Participation = require('../models/Participation');
 const { getBotUserId } = require('../services/botUser');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -14,6 +15,30 @@ const { upload } = require('../middleware/upload');
 // moment an event's capacity is reached - whether it filled with group
 // members or strangers the organizer accepted. Callers pass whether the
 // event just crossed into "full" on this request, so it only fires once.
+// GET /api/participations (routes/participations.js) is how a member sees
+// events/groups they've joined - including the "Roster" view for a group
+// they belong to but don't organize. It reads from its own Participation
+// collection, which nothing populated on the normal accept path (only a
+// one-off admin fix route did) - so every accepted applicant needs one of
+// these created here, or they'd never see what they joined.
+async function recordParticipation(event, userId, joinMethod) {
+  await Participation.findOneAndUpdate(
+    { event: event._id, participant: userId },
+    {
+      $setOnInsert: {
+        event: event._id,
+        participant: userId,
+        status: 'accepted',
+        joinMethod,
+        acceptedBy: event.organizer,
+        acceptedAt: new Date(),
+        isArchived: false
+      }
+    },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
+}
+
 async function notifyGroupIfJustFilled(event, req, justBecameFull) {
   if (!justBecameFull || !event.inviteGroupId) return;
   try {
@@ -563,6 +588,7 @@ router.post('/:id/decide', protect, async (req, res) => {
         } else {
           console.log(`Match already exists: User ${userId} <-> Event ${event._id}`);
         }
+        await recordParticipation(event, userId, 'swipe_application');
       } catch (matchError) {
         console.error('Error creating match:', matchError);
         // Don't fail the entire request if match creation fails
@@ -800,6 +826,7 @@ router.post('/join/:code', protect, async (req, res) => {
           matchedAt: new Date()
         });
       }
+      await recordParticipation(event, req.user.id, 'invite_code');
       await User.findByIdAndUpdate(req.user.id, {
         $push: { eventsJoined: { eventId: event._id, status: 'accepted' } }
       });
