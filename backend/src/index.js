@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
 
 // Import socket handler
 const { handleConnection } = require('./socket/socketHandler');
-const { corsOptions, allowedOrigins } = require('./config/cors');
+const { corsOptions, socketCorsOrigin } = require('./config/cors');
 const { apiLimiter } = require('./middleware/rateLimit');
 
 // Connect to MongoDB
@@ -43,10 +43,10 @@ app.set('trust proxy', 1);
 // Create HTTP server (required for Socket.IO)
 const server = http.createServer(app);
 
-// Initialize Socket.IO with the same origin allowlist as the HTTP API
+// Initialize Socket.IO with the same origin check as the HTTP API
 const io = socketIo(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: socketCorsOrigin,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
