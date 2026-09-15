@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import ProfilePreviewCard from '../../components/ProfilePreviewCard';
+import SelectModal from '../../components/SelectModal';
 
 const { width } = Dimensions.get('window');
 
@@ -26,10 +27,14 @@ const UserItem = ({
   isPending = false,
   isOrganizer = false,
   isSelf = false,
+  isTargetOwner = false,
+  canManage = false,
   onAccept,
   onReject,
   onStartChat,
   onViewProfile,
+  onOpenActions,
+  onStepDown,
 }) => {
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -67,8 +72,8 @@ const UserItem = ({
               </View>
             )}
             
-            {/* Organizer badge */}
-            {user.isEventOrganizer && (
+            {/* Organizer/Owner badge */}
+            {isTargetOwner && (
               <View style={styles.organizerBadge}>
                 <Ionicons name="star" size={12} color="white" />
               </View>
@@ -81,8 +86,10 @@ const UserItem = ({
           <View style={styles.contentRow}>
             <View style={styles.nameSection}>
               <Text style={styles.userName}>{user.name}</Text>
-              {user.isEventOrganizer && (
+              {user.isEventOrganizer ? (
                 <Text style={styles.organizerLabel}>Organizer</Text>
+              ) : isTargetOwner && (
+                <Text style={styles.organizerLabel}>Owner</Text>
               )}
             </View>
 
@@ -104,16 +111,37 @@ const UserItem = ({
                   </TouchableOpacity>
                 </View>
               ) : (
-                /* No point chatting with yourself - only show for others */
-                !isSelf && (
-                  <TouchableOpacity
-                    style={styles.chatButton}
-                    onPress={() => onStartChat(user)}
-                  >
-                    <Ionicons name="chatbubble-outline" size={16} color="#007AFF" />
-                    <Text style={styles.chatButtonText}>Chat</Text>
-                  </TouchableOpacity>
-                )
+                <View style={styles.rowActions}>
+                  {isSelf ? (
+                    /* Only an owner (not the organizer) can step down, and
+                       only from their own row. */
+                    isTargetOwner && !user.isEventOrganizer && (
+                      <TouchableOpacity style={styles.stepDownButton} onPress={onStepDown}>
+                        <Text style={styles.stepDownButtonText}>Step Down</Text>
+                      </TouchableOpacity>
+                    )
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.chatButton}
+                        onPress={() => onStartChat(user)}
+                      >
+                        <Ionicons name="chatbubble-outline" size={16} color="#007AFF" />
+                        <Text style={styles.chatButtonText}>Chat</Text>
+                      </TouchableOpacity>
+                      {/* Owners can't be kicked or re-promoted - they have
+                          to step down themselves. */}
+                      {canManage && !isTargetOwner && (
+                        <TouchableOpacity
+                          style={styles.moreButton}
+                          onPress={() => onOpenActions(user)}
+                        >
+                          <Ionicons name="ellipsis-horizontal" size={18} color="#999999" />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
               )}
             </View>
           </View>
@@ -148,13 +176,22 @@ export default function PendingApplicationsScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
+  // Sourced from the fresh GET /events/:id fetch in loadUsers, not the
+  // route param `event` (which only carries whatever the list screen it
+  // came from populated, and never admins).
+  const [organizerId, setOrganizerId] = useState(
+    event.organizer?._id || event.organizer
+  );
+  const [adminIds, setAdminIds] = useState([]);
+  const [actionMenuUser, setActionMenuUser] = useState(null);
 
   const handleViewProfile = (userData) => setViewingProfile(userData);
 
   // Check if current user is organizer of this event
-  const isOrganizer = event.organizer === user?.id || 
-                     event.organizer?._id === user?.id ||
-                     event.organizer?.toString() === user?.id;
+  const isOrganizer = organizerId === user?.id || organizerId?.toString?.() === user?.id;
+  // Organizer or a promoted owner - both can manage the roster.
+  const canManage = isOrganizer || adminIds.includes(user?.id);
+  const isOwner = (userId) => userId === organizerId || adminIds.includes(userId);
 
   useEffect(() => {
     loadUsers();
@@ -201,18 +238,21 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         // only ever carries whatever the list screen it came from
         // populated (name/photos), so bio/age were always blank here
         // even for a full profile.
-        const organizerId = eventData.organizer?._id || eventData.organizer;
-        const organizerInAccepted = accepted.find(u => u._id === organizerId);
+        const freshOrganizerId = eventData.organizer?._id || eventData.organizer;
+        const freshAdminIds = (eventData.admins || []).map(a => a._id || a);
+        const organizerInAccepted = accepted.find(u => u._id === freshOrganizerId);
         if (!organizerInAccepted && eventData.organizer) {
           accepted.unshift({
             ...eventData.organizer,
             isEventOrganizer: true
           });
         }
-        
+
         console.log('👥 Pending users:', pending.length);
         console.log('✅ Accepted users:', accepted.length);
-        
+
+        setOrganizerId(freshOrganizerId);
+        setAdminIds(freshAdminIds);
         setPendingUsers(pending);
         setAcceptedUsers(accepted);
       }
@@ -336,6 +376,73 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     }
   };
 
+  const handleMakeOwner = (userData) => {
+    Alert.alert(
+      'Make Owner',
+      `Send ${userData.name} an invite to become an owner of "${event.name}"? They'll need to accept it before it takes effect.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Invite',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/invite-owner`, { userId: userData._id });
+              Alert.alert('Sent', `Owner invite sent to ${userData.name}.`);
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to send owner invite');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleStepDown = () => {
+    Alert.alert(
+      'Step Down',
+      `Give up ownership of "${event.name}"? You'll still be on the roster, just without owner permissions.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Step Down',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/step-down`);
+              setAdminIds(prev => prev.filter(id => id !== user?.id));
+              Alert.alert('Done', "You're no longer an owner.");
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to step down');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleKick = (userData) => {
+    Alert.alert(
+      'Remove from Roster',
+      `Remove ${userData.name} from "${event.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/kick`, { userId: userData._id });
+              setAcceptedUsers(prev => prev.filter(u => u._id !== userData._id));
+              setPendingUsers(prev => prev.filter(u => u._id !== userData._id));
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to remove from roster');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -368,27 +475,27 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* Pending Applications Section - Sticky-like at top */}
-        {isOrganizer && pendingUsers.length > 0 && (
+        {canManage && pendingUsers.length > 0 && (
           <View style={styles.pendingSection}>
             <View style={styles.pendingSectionHeader}>
               <Text style={styles.pendingSectionTitle}>
                 Pending Applications ({pendingUsers.length})
               </Text>
             </View>
-            
+
             {pendingUsers.map((userData) => (
               <UserItem
                 key={userData._id}
                 user={userData}
                 isPending={true}
-                isOrganizer={isOrganizer}
+                isOrganizer={canManage}
                 isSelf={userData._id === user?.id}
                 onAccept={handleAcceptUser}
                 onReject={handleRejectUser}
                 onViewProfile={handleViewProfile}
               />
             ))}
-            
+
             <View style={styles.sectionDivider} />
           </View>
         )}
@@ -401,10 +508,14 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 key={userData._id}
                 user={userData}
                 isPending={false}
-                isOrganizer={isOrganizer}
+                isOrganizer={canManage}
                 isSelf={userData._id === user?.id}
+                isTargetOwner={isOwner(userData._id)}
+                canManage={canManage}
                 onStartChat={handleStartChat}
                 onViewProfile={handleViewProfile}
+                onOpenActions={setActionMenuUser}
+                onStepDown={handleStepDown}
               />
             ))
           ) : (
@@ -438,6 +549,21 @@ export default function PendingApplicationsScreen({ route, navigation }) {
           </ScrollView>
         </View>
       </Modal>
+
+      <SelectModal
+        visible={!!actionMenuUser}
+        title={actionMenuUser?.name}
+        options={[
+          { label: 'Make Owner', value: 'promote' },
+          { label: 'Remove from Roster', value: 'kick' },
+        ]}
+        onSelect={(action) => {
+          const targetUser = actionMenuUser;
+          if (action === 'promote') handleMakeOwner(targetUser);
+          else if (action === 'kick') handleKick(targetUser);
+        }}
+        onClose={() => setActionMenuUser(null)}
+      />
     </View>
   );
 }
@@ -650,7 +776,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  moreButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  stepDownButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  stepDownButtonText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
   // User Details
   userDetails: {
     paddingRight: 16,

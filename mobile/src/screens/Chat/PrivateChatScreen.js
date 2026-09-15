@@ -34,8 +34,40 @@ export default function PrivateChatScreen({ route, navigation }) {
   const [error, setError] = useState(null);
   const [otherUserData, setOtherUserData] = useState(otherUser || null);
   const [chatRoomId, setChatRoomId] = useState(null);
-  
+  const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'accepting' | 'accepted' | 'declined'
+
   const flatListRef = useRef(null);
+
+  const handleAcceptOwnerInvite = async (message) => {
+    const eventId = message.systemMessage?.data?.eventId;
+    if (!eventId) return;
+    setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepting' }));
+    try {
+      const response = await api.post(`/events/${eventId}/accept-owner-invite`);
+      if (response.data.success) {
+        setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepted' }));
+      } else {
+        throw new Error(response.data.message || 'Failed to accept');
+      }
+    } catch (error) {
+      setInviteStatuses(prev => {
+        const next = { ...prev };
+        delete next[message._id];
+        return next;
+      });
+      Alert.alert('Error', error.response?.data?.message || 'Failed to accept owner invite');
+    }
+  };
+
+  const handleDeclineOwnerInvite = (message) => {
+    setInviteStatuses(prev => ({ ...prev, [message._id]: 'declined' }));
+    const eventId = message.systemMessage?.data?.eventId;
+    if (eventId) {
+      api.post(`/events/${eventId}/decline-owner-invite`).catch(() => {
+        // Non-critical - worst case the card re-offers the buttons after a reload.
+      });
+    }
+  };
 
   // Load messages
   const loadMessages = useCallback(async (showLoadingSpinner = true) => {
@@ -65,7 +97,19 @@ export default function PrivateChatScreen({ route, navigation }) {
 
         // For iPhone style, newest messages at bottom (traditional chat order)
         setMessages(loadedMessages);
-        
+
+        // Seed each owner-invite card's accept/decline state from the
+        // server-computed viewerStatus, so a card already responded to
+        // doesn't offer the buttons again after a reload.
+        const seededStatuses = {};
+        loadedMessages.forEach(m => {
+          const status = m.systemMessage?.data?.viewerStatus;
+          if (status) seededStatuses[m._id] = status;
+        });
+        if (Object.keys(seededStatuses).length) {
+          setInviteStatuses(prev => ({ ...seededStatuses, ...prev }));
+        }
+
         // Auto-scroll to bottom (newest messages) 
         setTimeout(() => {
           if (flatListRef.current && loadedMessages.length > 0) {
@@ -154,7 +198,11 @@ export default function PrivateChatScreen({ route, navigation }) {
     const handleNewMessage = (message) => {
       if (message.chatId !== chatRoomId) return;
       const senderId = message.sender?._id || message.sender;
-      if (senderId === user?.id) return;
+      // Skip own regular messages - those are already added optimistically
+      // by sendMessage(). An owner-invite card's "sender" is the inviter,
+      // even when the inviter is the current viewer, so it must not be
+      // skipped here or they'd never see their own invite appear live.
+      if (message.messageType !== 'system' && senderId === user?.id) return;
       setMessages(prev => [...prev, message]);
       setTimeout(() => {
         if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
@@ -268,8 +316,66 @@ export default function PrivateChatScreen({ route, navigation }) {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
   };
 
+  // Render an owner-invite card - a distinct bubble from a normal text
+  // message, with its own accept/decline actions. Promoting someone to
+  // owner only takes effect once they accept it here.
+  const renderOwnerInviteCard = (item) => {
+    const data = item.systemMessage?.data || {};
+    const status = inviteStatuses[item._id];
+
+    return (
+      <View style={styles.inviteCardContainer}>
+        <View style={styles.inviteCard}>
+          <View style={styles.inviteCardHeader}>
+            <Ionicons name="ribbon" size={18} color="#0078FF" />
+            <Text style={styles.inviteCardTitle} numberOfLines={2}>
+              {data.invitedByName ? `${data.invitedByName} invited you to be an owner of` : 'Owner invite for'} "{data.eventName}"
+            </Text>
+          </View>
+        </View>
+
+        {status === 'accepted' ? (
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="checkmark-circle" size={20} color="#00C853" />
+            <Text style={styles.inviteCardResultText}>You're an owner now</Text>
+          </View>
+        ) : status === 'declined' ? (
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="close-circle" size={20} color="#999999" />
+            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Declined</Text>
+          </View>
+        ) : (
+          <View style={styles.inviteCardActions}>
+            <TouchableOpacity
+              style={styles.inviteCardPassButton}
+              onPress={() => handleDeclineOwnerInvite(item)}
+              disabled={status === 'accepting'}
+            >
+              <Ionicons name="close" size={22} color="#FF3B30" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.inviteCardAcceptButton}
+              onPress={() => handleAcceptOwnerInvite(item)}
+              disabled={status === 'accepting'}
+            >
+              {status === 'accepting' ? (
+                <ActivityIndicator size="small" color="#00C853" />
+              ) : (
+                <Ionicons name="checkmark" size={22} color="#00C853" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   // Render message item (iPhone Messages style)
   const renderMessage = ({ item, index }) => {
+    if (item.messageType === 'system' && item.systemMessage?.type === 'owner_invite') {
+      return renderOwnerInviteCard(item);
+    }
+
     const isOwn = item.sender?._id === user?.id || item.isOwn;
     const senderName = item.sender?.name || 'Unknown User';
     
@@ -437,7 +543,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  
+
+  // Owner Invite Card
+  inviteCardContainer: {
+    alignSelf: 'center',
+    width: '85%',
+    marginVertical: 8,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  inviteCard: {
+    padding: 14,
+  },
+  inviteCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inviteCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  inviteCardActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+  },
+  inviteCardPassButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#333333',
+  },
+  inviteCardAcceptButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  inviteCardResult: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+  },
+  inviteCardResultText: {
+    color: '#00C853',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   // Header
   headerBackButton: {
     padding: 4,

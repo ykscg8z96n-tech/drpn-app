@@ -99,6 +99,16 @@ const eventSchema = new mongoose.Schema({
     default: []
   },
 
+  // Users who declined an owner-invite card sent via private message -
+  // keeps that card from being re-clickable, the same way `passedBy`
+  // does for an event invite. Accepting is tracked by presence in
+  // `admins` instead - there's no separate "accepted" list to keep in
+  // sync.
+  ownerInviteDeclinedBy: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    default: []
+  },
+
   // Organizer and admin management
   organizer: {
     type: mongoose.Schema.Types.ObjectId,

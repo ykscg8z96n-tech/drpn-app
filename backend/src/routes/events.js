@@ -8,6 +8,7 @@ const Match = require('../models/Match');
 const Message = require('../models/Message');
 const ChatCounter = require('../models/ChatCounter');
 const Participation = require('../models/Participation');
+const PrivateConnection = require('../models/PrivateConnection');
 const { getBotUserId } = require('../services/botUser');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -106,6 +107,65 @@ async function postEventInviteCard(event, group, organizerId, req) {
   const io = req.app.get('io');
   if (io) {
     io.to(`${chatMessage.chatType}:${chatMessage.chatId}`).emit('message:new', chatMessage);
+  }
+}
+
+// Promoting someone to owner has to be something they opt into (so an
+// organizer can't just hand you responsibility you didn't want) - sent
+// as a card in a private message the same way an event/group invite is
+// a card in the group chat, rather than applying instantly. Reuses/
+// upserts an accepted PrivateConnection between the two rather than
+// going through POST /private-connections/invite's "both users must be
+// participants" check, since roster membership already establishes that.
+async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
+  let connection = await PrivateConnection.findOne({
+    $or: [
+      { participant: fromUserId, otherUser: toUserId },
+      { participant: toUserId, otherUser: fromUserId }
+    ]
+  });
+  if (!connection) {
+    connection = await PrivateConnection.create({
+      participant: toUserId,
+      otherUser: fromUserId,
+      originEvent: event._id,
+      status: 'accepted',
+      initiatedBy: 'other_user',
+      invite: { sentAt: new Date(), acceptedAt: new Date() }
+    });
+  } else if (connection.status !== 'accepted') {
+    connection.status = 'accepted';
+    connection.invite.acceptedAt = new Date();
+    await connection.save();
+  }
+
+  const uids = [fromUserId.toString(), toUserId.toString()].sort();
+  const chatId = `private-${uids[0]}-${uids[1]}`;
+  const seq = await ChatCounter.nextSeq(chatId);
+  const inviter = await User.findById(fromUserId).select('name');
+  const message = await Message.create({
+    chatType: 'private',
+    chatId,
+    privateConnection: connection._id,
+    sender: fromUserId,
+    text: `${inviter?.name || 'Someone'} invited you to be an owner of "${event.name}"`,
+    messageType: 'system',
+    systemMessage: {
+      type: 'owner_invite',
+      data: {
+        eventId: event._id,
+        eventName: event.name,
+        eventType: event.type,
+        invitedByName: inviter?.name
+      }
+    },
+    seq
+  });
+  await message.populate('sender', 'name photos');
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
   }
 }
 
@@ -617,16 +677,23 @@ router.get('/:id/applicants', protect, async (req, res) => {
     const event = await Event.findById(req.params.id)
       .populate('applicants.userId', 'name photos age bio')
       .populate('organizer', 'name');
-    
+
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    
-    // Check if user is organizer or admin
-    if (event.organizer._id.toString() !== req.user.id && !event.admins.includes(req.user.id)) {
+
+    // Check if user is organizer or admin. Was `!event.admins.includes(req.user.id)`
+    // - comparing an ObjectId to a string is never equal, so an admin
+    // (as opposed to the organizer) could never actually pass this check.
+    // Has to run before `admins` is populated below - canUserManage's
+    // ObjectId.toString() comparison would break against populated User
+    // documents instead of raw ids.
+    if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized to view applicants' });
     }
-    
+
+    await event.populate('admins', 'name');
+
     // Return only the applicants data with populated user info
     res.json({
       success: true,
@@ -634,7 +701,9 @@ router.get('/:id/applicants', protect, async (req, res) => {
       eventInfo: {
         name: event.name,
         type: event.type,
-        capacity: event.capacity || event.groupSize
+        capacity: event.capacity || event.groupSize,
+        organizer: event.organizer,
+        admins: event.admins
       }
     });
   } catch (error) {
@@ -673,8 +742,8 @@ router.post('/:id/decide', protect, async (req, res) => {
       });
     }
 
-    // Check if user is the organizer
-    if (event.organizer.toString() !== req.user.id) {
+    // Organizer or a promoted owner can decide applications.
+    if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to manage this event'
@@ -792,12 +861,13 @@ router.get('/:id', protect, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id)
       .populate('organizer', 'name photos bio age')
-      .populate('applicants.userId', 'name photos bio age');
+      .populate('applicants.userId', 'name photos bio age')
+      .populate('admins', 'name photos bio age');
 
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    
+
     res.json({
       success: true,
       data: event
@@ -984,6 +1054,152 @@ router.post('/:id/pass-invite', protect, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error in pass-invite:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/invite-owner
+// @desc    Send a roster member an owner-invite card via private message
+//          (organizer/existing owner only) - promoting doesn't take
+//          effect until they accept it.
+// @access  Private
+router.post('/:id/invite-owner', protect, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    if (!event.canUserManage(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (userId === req.user.id) {
+      return res.status(400).json({ success: false, message: "You can't invite yourself" });
+    }
+    if (event.organizer.toString() === userId || event.admins.some(id => id.toString() === userId)) {
+      return res.status(400).json({ success: false, message: 'Already an owner' });
+    }
+    const isMember = event.applicants.some(a => a.userId.toString() === userId && a.status === 'accepted');
+    if (!isMember) {
+      return res.status(400).json({ success: false, message: 'Only current roster members can be made owners' });
+    }
+
+    await postOwnerInviteCard(event, req.user.id, userId, req);
+
+    res.json({ success: true, message: 'Owner invite sent' });
+  } catch (error) {
+    console.error('Error in invite-owner:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/accept-owner-invite
+// @desc    Accept an owner-invite card - the only thing that actually
+//          grants owner (admin) status.
+// @access  Private
+router.post('/:id/accept-owner-invite', protect, async (req, res) => {
+  try {
+    await Event.updateOne(
+      { _id: req.params.id },
+      { $addToSet: { admins: req.user.id }, $pull: { ownerInviteDeclinedBy: req.user.id } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in accept-owner-invite:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/decline-owner-invite
+// @desc    Dismiss an owner-invite card without becoming an owner.
+// @access  Private
+router.post('/:id/decline-owner-invite', protect, async (req, res) => {
+  try {
+    await Event.updateOne(
+      { _id: req.params.id },
+      { $addToSet: { ownerInviteDeclinedBy: req.user.id } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in decline-owner-invite:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/step-down
+// @desc    An owner (not the organizer) voluntarily gives up ownership.
+// @access  Private
+router.post('/:id/step-down', protect, async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    if (event.organizer.toString() === req.user.id) {
+      return res.status(400).json({ success: false, message: 'The organizer cannot step down' });
+    }
+    if (!event.admins.some(id => id.toString() === req.user.id)) {
+      return res.status(400).json({ success: false, message: 'You are not an owner of this event' });
+    }
+    event.admins = event.admins.filter(id => id.toString() !== req.user.id);
+    await event.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in step-down:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/kick
+// @desc    Remove a roster member (organizer/owner only). Owners can't
+//          be kicked - they have to step down themselves - and the
+//          organizer can never be kicked.
+// @access  Private
+router.post('/:id/kick', protect, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    if (!event.canUserManage(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (event.organizer.toString() === userId) {
+      return res.status(400).json({ success: false, message: "Can't remove the organizer" });
+    }
+    if (event.admins.some(id => id.toString() === userId)) {
+      return res.status(403).json({ success: false, message: "Owners can't remove other owners - they have to step down themselves" });
+    }
+
+    const applicantIndex = event.applicants.findIndex(a => a.userId.toString() === userId);
+    if (applicantIndex === -1) {
+      return res.status(404).json({ success: false, message: 'User not found on the roster' });
+    }
+    const wasAccepted = event.applicants[applicantIndex].status === 'accepted';
+    event.applicants.splice(applicantIndex, 1);
+    if (wasAccepted && event.type === 'event') {
+      event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+    }
+    await event.save();
+
+    await User.findByIdAndUpdate(userId, { $pull: { eventsJoined: { eventId: event._id } } });
+    if (wasAccepted) {
+      await Match.deleteOne({ individual: userId, event: event._id });
+      await Participation.deleteOne({ event: event._id, participant: userId });
+    }
+
+    res.json({ success: true, message: 'Removed from roster' });
+  } catch (error) {
+    console.error('Error in kick:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

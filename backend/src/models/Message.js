@@ -91,7 +91,7 @@ const messageSchema = new mongoose.Schema({
   systemMessage: {
     type: {
       type: String,
-      enum: ['user_joined', 'user_left', 'event_updated', 'connection_established', 'event_invite']
+      enum: ['user_joined', 'user_left', 'event_updated', 'connection_established', 'event_invite', 'owner_invite']
     },
     data: mongoose.Schema.Types.Mixed
   },
