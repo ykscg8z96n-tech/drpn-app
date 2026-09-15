@@ -446,11 +446,13 @@ router.get('/private/:connectionId', protect, async (req, res) => {
       data: messages.reverse(), // Return in chronological order
       chatInfo: {
         otherUser: {
+          _id: otherUser._id,
           name: otherUser.name,
           photos: otherUser.photos
         },
         chatRoomId: sharedRoomId, // Use shared room ID for new messages
-        connectionId: req.params.connectionId
+        connectionId: req.params.connectionId,
+        isBlocked: connection.chatParticipation.isBlocked
       }
     });
 

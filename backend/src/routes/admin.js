@@ -287,4 +287,24 @@ router.post('/dedupe/cleanup', secretGate, async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/reports
+// @desc    List user-submitted reports, newest first. There's no admin
+//          dashboard yet - this is the only way to review them for now.
+// @access  Private (shared secret via x-admin-secret header)
+router.get('/reports', secretGate, async (req, res) => {
+  try {
+    const Report = require('../models/Report');
+    const reports = await Report.find()
+      .populate('reporter', 'name email')
+      .populate('reportedUser', 'name email')
+      .sort('-createdAt')
+      .limit(200);
+
+    res.json({ success: true, data: reports });
+  } catch (error) {
+    console.error('Error fetching reports:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
