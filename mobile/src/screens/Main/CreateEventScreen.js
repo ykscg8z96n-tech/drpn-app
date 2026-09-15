@@ -1,5 +1,6 @@
 // mobile/src/screens/Create/CreateEventScreen.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -332,6 +333,16 @@ export default function CreateEventScreen({ navigation }) {
     checkOrganizerStatus();
   }, []);
 
+  // Refetch whenever this screen regains focus (e.g. navigating back after
+  // creating a new event/group) - otherwise the list only ever loads once
+  // on mount and a newly created item silently doesn't appear until the
+  // next manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      loadMyEvents();
+    }, [])
+  );
+
   const checkOrganizerStatus = async () => {
     try {
       const response = await api.get('/users/profile');
@@ -367,43 +378,22 @@ export default function CreateEventScreen({ navigation }) {
   const loadMyEvents = async () => {
     try {
       setLoading(true);
-      
-      // Load events user created (as organizer)
-      const organizerResponse = await api.get('/events/organizer/my-events');
-      const organizerEvents = organizerResponse.data.data.map(event => ({ ...event, isMyEvent: true }));
-      
-      // Load events user is participating in
-      let allEvents = [...organizerEvents];
-      
-      try {
-        const participationResponse = await api.get('/events/my-participation');
-        const participatingEvents = participationResponse.data.data.map(participation => ({ 
-          ...participation.event, 
-          isMyEvent: false 
+
+      // /participations already returns both events/groups you organize
+      // and ones you've joined as a member, in one call - a member needs
+      // to see their groups here too (to view the roster), not just ones
+      // they organize.
+      const response = await api.get('/participations');
+      const events = (response.data.data || [])
+        .filter(item => item.event && !item.event.isArchived)
+        .map(item => ({
+          ...item.event,
+          isMyEvent: item.userRole === 'organizer'
+            || item.event.organizer?._id === user?.id
+            || item.event.organizer === user?.id
         }));
-        allEvents.push(...participatingEvents);
-      } catch (participationError) {
-        console.log('No participation data or endpoint not available');
-      }
-      
-      // Remove duplicates (prefer organizer version)
-      const uniqueEvents = [];
-      const eventIds = new Set();
-      allEvents.forEach(event => {
-        if (!eventIds.has(event._id)) {
-          eventIds.add(event._id);
-          uniqueEvents.push(event);
-        } else if (event.isMyEvent) {
-          // Replace with organizer version if found
-          const index = uniqueEvents.findIndex(e => e._id === event._id);
-          uniqueEvents[index] = event;
-        }
-      });
-      
-      // Filter out archived events
-      const activeEvents = uniqueEvents.filter(event => !event.isArchived);
-      console.log('Final events:', activeEvents.length);
-      setMyEvents(activeEvents);
+
+      setMyEvents(events);
     } catch (error) {
       console.error('Error loading events:', error);
       setMyEvents([]);
