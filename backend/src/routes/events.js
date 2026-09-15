@@ -1121,6 +1121,22 @@ router.post('/:id/accept-owner-invite', protect, async (req, res) => {
       { _id: req.params.id },
       { $addToSet: { admins: req.user.id }, $pull: { ownerInviteDeclinedBy: req.user.id } }
     );
+    // Also stamp the response directly onto the specific invite message,
+    // if we know which one this was. GET /messages/private/:id previously
+    // inferred a card's status by re-checking Event.admins/
+    // ownerInviteDeclinedBy at read time - fragile if this event/group's
+    // name is shared by more than one document (this app has had
+    // duplicate-named test events) or if admin status later changes for
+    // an unrelated reason (e.g. stepping down), either of which would
+    // make an old, already-answered card silently flip back to looking
+    // unanswered. Recording the response on the message itself removes
+    // that inference entirely.
+    if (req.body.messageId) {
+      await Message.updateOne(
+        { _id: req.body.messageId },
+        { $set: { 'systemMessage.data.responseStatus': 'accepted' } }
+      );
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error in accept-owner-invite:', error);
@@ -1137,6 +1153,12 @@ router.post('/:id/decline-owner-invite', protect, async (req, res) => {
       { _id: req.params.id },
       { $addToSet: { ownerInviteDeclinedBy: req.user.id } }
     );
+    if (req.body.messageId) {
+      await Message.updateOne(
+        { _id: req.body.messageId },
+        { $set: { 'systemMessage.data.responseStatus': 'declined' } }
+      );
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error in decline-owner-invite:', error);
