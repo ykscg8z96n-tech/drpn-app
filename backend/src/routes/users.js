@@ -536,54 +536,8 @@ router.get('/stats', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/users/block/:userId
-// @desc    Block another user
-// @access  Private
-router.post('/block/:userId', protect, async (req, res) => {
-  try {
-    const userToBlock = req.params.userId;
-    
-    if (userToBlock === req.user.id) {
-      return res.status(400).json({ success: false, message: 'Cannot block yourself' });
-    }
-
-    const user = await User.findById(req.user.id);
-    
-    if (!user.blockedUsers.includes(userToBlock)) {
-      user.blockedUsers.push(userToBlock);
-      await user.save();
-    }
-
-    res.json({
-      success: true,
-      message: 'User blocked successfully'
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// @route   DELETE /api/users/block/:userId
-// @desc    Unblock a user
-// @access  Private
-router.delete('/block/:userId', protect, async (req, res) => {
-  try {
-    const userToUnblock = req.params.userId;
-    
-    const user = await User.findById(req.user.id);
-    user.blockedUsers = user.blockedUsers.filter(id => id.toString() !== userToUnblock);
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'User unblocked successfully'
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+// Blocking is handled per-chat via PrivateConnection.blockUser()/unblockUser()
+// (see routes/private-connections.js :id/block), not at the User level.
 
 // @route   GET /api/users/:id
 // @desc    Get another user's public profile (e.g. tapping a name/avatar
