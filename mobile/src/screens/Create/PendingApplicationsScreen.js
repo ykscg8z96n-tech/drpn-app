@@ -436,25 +436,22 @@ export default function PendingApplicationsScreen({ route, navigation }) {
 
       <Modal
         visible={!!viewingProfile}
-        transparent
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setViewingProfile(null)}
       >
-        <TouchableOpacity
-          style={styles.profileModalOverlay}
-          activeOpacity={1}
-          onPress={() => setViewingProfile(null)}
-        >
-          <TouchableOpacity style={styles.profileModalSheet} activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <ScrollView bounces={false}>
-              <ProfilePreviewCard profile={viewingProfile} />
-            </ScrollView>
-
-            <TouchableOpacity style={styles.profileModalClose} onPress={() => setViewingProfile(null)}>
-              <Ionicons name="close" size={24} color="#FFFFFF" />
+        <View style={styles.profileModalContainer}>
+          <View style={styles.profileModalHeader}>
+            <TouchableOpacity onPress={() => setViewingProfile(null)}>
+              <Ionicons name="close" size={26} color="#FFFFFF" />
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            <Text style={styles.profileModalHeaderTitle}>{viewingProfile?.name}</Text>
+            <View style={{ width: 26 }} />
+          </View>
+          <ScrollView bounces={false}>
+            <ProfilePreviewCard profile={viewingProfile} />
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -712,28 +709,24 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Profile view modal
-  profileModalOverlay: {
+  // Profile view modal - full screen, same as viewing your own Profile
+  profileModalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: '#000000',
   },
-  profileModalSheet: {
-    maxHeight: '85%',
-    backgroundColor: '#111111',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    overflow: 'hidden',
-  },
-  profileModalClose: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+  profileModalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A1A',
+  },
+  profileModalHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
