@@ -12,6 +12,17 @@ import { Ionicons } from '@expo/vector-icons';
 import L from 'leaflet';
 import api from '../services/api';
 
+// Leaflet's default marker icon normally resolves its image paths relative
+// to its own CSS file - loading it through a bundler instead of a plain
+// <script> tag breaks that lookup and every marker renders as a broken
+// image. Point it at the CDN copies directly.
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
 const MIN_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 150;
 const DEFAULT_RADIUS_KM = 25;
