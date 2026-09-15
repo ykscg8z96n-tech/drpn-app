@@ -64,7 +64,7 @@ export function installMockApi(api) {
   mock.onDelete(/\/events\/[\w-]+$/).reply(() => ok({ archived: true }));
 
   mock.onGet('/private-connections').reply(() => ok(mockPrivateConnections));
-  mock.onPost('/connections/invite').reply(() => ok({ requested: true }));
+  mock.onPost('/private-connections/invite').reply(() => ok({ requested: true }));
 
   mock.onGet(/\/participations\?type=group/).reply(() => ok(mockGroupParticipations));
   mock.onGet(/\/participations/).reply(() => ok(mockEventParticipations));

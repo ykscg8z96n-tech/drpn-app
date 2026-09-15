@@ -87,7 +87,7 @@ router.get('/my-applications', protect, async (req, res) => {
     const user = await User.findById(req.user.id).populate({
       path: 'eventsJoined.eventId',
       select: 'name type category photos eventDate location capacity currentAttendees groupSize organizer isArchived',
-      populate: { path: 'organizer', select: 'name' }
+      populate: { path: 'organizer', select: 'name photos bio' }
     });
 
     const applications = user.eventsJoined
