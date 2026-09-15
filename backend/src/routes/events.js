@@ -486,6 +486,18 @@ router.put('/:id', [protect,
       updates.categories = Array.from(new Set([primary, ...updates.categories]));
     }
 
+    // location.type ('Point') marks it as GeoJSON for the 2dsphere index -
+    // the app never sends that field back (it only knows about
+    // address/city/state/coordinates), so replacing the whole subdocument
+    // with what the client sent silently drops it. Mongoose's schema
+    // default for it only applies on document creation, not here, so it
+    // has to be restored explicitly or the event's location becomes
+    // permanently unindexable ("unknown GeoJSON type") on this and every
+    // later save.
+    if (updates.location) {
+      updates.location = { type: 'Point', ...updates.location };
+    }
+
     updates.updatedAt = new Date();
     
     const updatedEvent = await Event.findByIdAndUpdate(
