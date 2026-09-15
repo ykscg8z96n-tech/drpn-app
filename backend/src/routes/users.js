@@ -91,7 +91,17 @@ router.get('/my-applications', protect, async (req, res) => {
     });
 
     const applications = user.eventsJoined
-      .filter(entry => entry.eventId && !entry.eventId.isArchived)
+      // A stale eventsJoined entry from earlier testing (e.g. switching
+      // an account to organizer after already applying) can leave an
+      // application pointing at your own event - applying to something
+      // you organize doesn't make sense, and showing it lets you
+      // "withdraw" from your own event and confuses the Pending section
+      // with a duplicate of the same card already shown as organizer.
+      .filter(entry =>
+        entry.eventId
+        && !entry.eventId.isArchived
+        && entry.eventId.organizer?._id?.toString() !== req.user.id
+      )
       .map(entry => ({
         event: entry.eventId,
         status: entry.status,

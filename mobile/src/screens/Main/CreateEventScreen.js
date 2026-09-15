@@ -543,8 +543,24 @@ export default function CreateEventScreen({ navigation }) {
 
   const getFilteredEvents = () => {
     const type = activeTab === 'Events' ? 'event' : 'group';
-    const items = myEvents.filter(event => event.type === type);
-    const pending = pendingApplications.filter(event => event.type === type);
+
+    // Defensively dedupe by _id - a flaky connection retrying a request,
+    // or a stale participation left over from testing, can otherwise
+    // surface the same event/group more than once.
+    const seenIds = new Set();
+    const dedupe = (list) => list.filter(event => {
+      if (!event.type || event.type !== type) return false;
+      if (seenIds.has(event._id)) return false;
+      seenIds.add(event._id);
+      return true;
+    });
+
+    const items = dedupe(myEvents);
+    // A pending application for something you already organize or belong
+    // to (e.g. a stale application left over after being accepted) would
+    // otherwise show the same card twice - once in the main list, once
+    // under Pending.
+    const pending = dedupe(pendingApplications);
 
     if (pending.length === 0) {
       return items;
