@@ -152,16 +152,40 @@ export default function ChatScreen({ route, navigation }) {
   // Set navigation header
   useEffect(() => {
     navigation.setOptions({
-      title: eventName || 'Chat',
+      // A back button only shows automatically if this screen has real
+      // navigation history behind it - refreshing the browser while
+      // already on this chat (the URL is synced per-screen) leaves React
+      // Navigation with just this one route and nothing to go back to,
+      // so the default header back button silently doesn't appear. This
+      // always has somewhere to go.
+      headerLeft: () => (
+        <TouchableOpacity
+          style={styles.headerBackButton}
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MatchesMain')}
+        >
+          <Ionicons name="chevron-back" size={28} color="#0078FF" />
+        </TouchableOpacity>
+      ),
+      headerTitle: () => (
+        <View style={styles.headerTitleContainer}>
+          {eventData?.photos && eventData.photos.length > 0 ? (
+            <Image source={{ uri: eventData.photos[0].url || eventData.photos[0] }} style={styles.headerAvatar} />
+          ) : (
+            <View style={styles.headerAvatarPlaceholder}>
+              <Ionicons name={eventType === 'group' ? 'people' : 'calendar'} size={16} color="#FFFFFF" />
+            </View>
+          )}
+          <Text style={styles.headerTitleText} numberOfLines={1}>
+            {eventName || 'Chat'}
+          </Text>
+        </View>
+      ),
       headerStyle: {
         backgroundColor: '#000000',
       },
       headerTintColor: '#FFFFFF',
-      headerTitleStyle: {
-        fontWeight: '600',
-      },
     });
-  }, [navigation, eventName]);
+  }, [navigation, eventName, eventData, eventType]);
 
   // Load messages on focus
   useFocusEffect(
@@ -495,6 +519,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+
+  // Header
+  headerBackButton: {
+    padding: 4,
+    marginLeft: -4,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+  },
+  headerAvatarPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#333333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    maxWidth: 180,
   },
 
   // Loading & Error States

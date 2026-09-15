@@ -223,17 +223,32 @@ privateConnectionSchema.statics.sendInvite = function(fromUserId, toUserId, orig
   });
 };
 
-// Static method to get user's private connections
-privateConnectionSchema.statics.getUserConnections = function(userId, status = 'accepted') {
-  return this.find({
-    participant: userId,
+// Static method to get user's private connections. A connection's
+// `participant`/`otherUser` fields are fixed at creation time (recipient
+// vs sender) and don't mean "me" vs "the other person" - querying by
+// `participant` alone missed every chat this user started themselves
+// (where they're stored as `otherUser`), and populating the literal
+// `otherUser` field would show the viewer their own name/photo on a
+// chat they started. Query both directions, then normalize each result
+// so `otherUser` always means whoever isn't the viewer.
+privateConnectionSchema.statics.getUserConnections = async function(userId, status = 'accepted') {
+  const connections = await this.find({
+    $or: [{ participant: userId }, { otherUser: userId }],
     status: status,
     isArchived: false,
     'chatParticipation.isBlocked': false
   })
+  .populate('participant', 'name photos isOnline lastActive')
   .populate('otherUser', 'name photos isOnline lastActive')
   .populate('originEvent', 'name type')
   .sort('-chatParticipation.lastMessageAt');
+
+  return connections.map((connection) => {
+    const obj = connection.toObject();
+    const isViewerParticipant = connection.participant._id.toString() === userId.toString();
+    obj.otherUser = isViewerParticipant ? connection.otherUser : connection.participant;
+    return obj;
+  });
 };
 
 // Static method to get pending invites for user

@@ -138,16 +138,19 @@ router.get('/', protect, async (req, res) => {
 
     console.log(`📱 Getting private connections for user ${req.user.id}, status: ${status}`);
 
+    // getUserConnections already returns plain objects with `otherUser`
+    // normalized to mean "whoever isn't me", regardless of which raw
+    // participant/otherUser field they were originally stored in.
     const connections = await PrivateConnection.getUserConnections(req.user.id, status);
 
     // chatParticipation.unreadCount is never actually incremented when a
     // message arrives - compute the real count from Message's own readBy
     // tracking instead (mirrors the same fix in routes/participations.js).
     const connectionsWithUnread = await Promise.all(connections.map(async (connection) => {
-      const uids = [connection.participant.toString(), connection.otherUser.toString()].sort();
+      const uids = [req.user.id, connection.otherUser._id.toString()].sort();
       const chatId = `private-${uids[0]}-${uids[1]}`;
       const unreadCount = await Message.getUnreadCount('private', chatId, req.user.id);
-      return { ...connection.toObject(), unreadCount };
+      return { ...connection, unreadCount };
     }));
 
     res.json({
