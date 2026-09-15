@@ -15,6 +15,7 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import api from '../../services/api';
 
 const loginSchema = Yup.object().shape({
   email: Yup.string().email('Invalid email').required('Email is required'),
@@ -33,6 +34,26 @@ export default function LoginScreen() {
 
     if (!result.success) {
       Alert.alert('Login Failed', result.message);
+    }
+  };
+
+  // Temporary pre-launch flow - there's no email delivery set up yet, so
+  // this hands back a working temporary password directly instead of
+  // emailing a reset link (see backend/src/routes/auth.js). Fine for now
+  // since there are no real users; needs a real email flow before launch.
+  const handleForgotPassword = async (email) => {
+    if (!email) {
+      Alert.alert('Forgot Password', 'Enter your email above first, then tap this again.');
+      return;
+    }
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      Alert.alert(
+        'Temporary Password',
+        `Your temporary password is:\n\n${response.data.temporaryPassword}\n\nLog in with it, then change your password from your profile.`
+      );
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to reset password');
     }
   };
 
@@ -84,9 +105,9 @@ export default function LoginScreen() {
               )}
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.forgotPassword}
-              onPress={() => Alert.alert('Forgot Password', 'Feature coming soon!')}
+              onPress={() => handleForgotPassword(values.email)}
             >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>

@@ -22,6 +22,7 @@ export function installMockApi(api) {
 
   mock.onPost('/auth/login').reply(200, { success: true, token: mockToken, user: mockUser });
   mock.onPost('/auth/register').reply(200, { success: true, token: mockToken, user: mockUser });
+  mock.onPost('/auth/forgot-password').reply(() => ok({ temporaryPassword: 'demo123' }));
 
   mock.onGet('/users/profile').reply(() => ok(mockUser));
   mock.onPut('/users/profile').reply((config) => ok({ ...mockUser, ...JSON.parse(config.data || '{}') }));
