@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
@@ -26,12 +27,21 @@ const signupSchema = Yup.object().shape({
 
 export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const { signUp } = useAuth();
   const navigation = useNavigation();
 
   const handleSignup = async (values) => {
+    if (!agreedToTerms) {
+      Alert.alert(
+        'Confirm to Continue',
+        'Please confirm you\'re 18+ and agree to the Terms of Service and Privacy Policy.'
+      );
+      return;
+    }
+
     setLoading(true);
-    
+
     try {
       // Get user's location
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -134,9 +144,28 @@ export default function SignupScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
+                style={styles.checkboxRow}
+                onPress={() => setAgreedToTerms(prev => !prev)}
+              >
+                <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                  {agreedToTerms && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+                </View>
+                <Text style={styles.termsText}>
+                  I'm 18 or older and I agree to the{' '}
+                  <Text style={styles.termsLink} onPress={() => navigation.navigate('TermsOfService')}>
+                    Terms of Service
+                  </Text>{' '}
+                  and{' '}
+                  <Text style={styles.termsLink} onPress={() => navigation.navigate('PrivacyPolicy')}>
+                    Privacy Policy
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, (loading || !agreedToTerms) && styles.buttonDisabled]}
                 onPress={handleSubmit}
-                disabled={loading}
+                disabled={loading || !agreedToTerms}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
@@ -144,14 +173,6 @@ export default function SignupScreen() {
                   <Text style={styles.buttonText}>Create Account</Text>
                 )}
               </TouchableOpacity>
-
-              <View style={styles.termsContainer}>
-                <Text style={styles.termsText}>
-                  By signing up, you agree to our{' '}
-                  <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
-                </Text>
-              </View>
 
               <View style={styles.loginContainer}>
                 <Text style={styles.loginText}>Already have an account? </Text>
@@ -227,14 +248,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  termsContainer: {
-    marginTop: 24,
-    paddingHorizontal: 8,
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 4,
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#6B7280',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
   },
   termsText: {
+    flex: 1,
     fontSize: 14,
     color: '#9CA3AF',
-    textAlign: 'center',
     lineHeight: 20,
   },
   termsLink: {
