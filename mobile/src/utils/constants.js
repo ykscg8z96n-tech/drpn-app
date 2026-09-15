@@ -1,14 +1,15 @@
 // mobile/src/utils/constants.js
 const DEV_API_URL = 'http://172.20.10.2:5000/api';
-const PROD_API_URL = 'https://your-api-domain.com/api';
+const PROD_API_URL = 'https://drpn-backend.onrender.com/api';
 
 // Standalone demo mode: intercepts all API calls with fixture data, no
-// live backend required. Set to false to hit a real API.
+// live backend required. Set to false to hit a real API (PROD_API_URL /
+// SOCKET_URL below, now pointed at the live Render deployment).
 export const USE_MOCK_API = true;
 
 export default {
   API_URL: __DEV__ ? DEV_API_URL : PROD_API_URL,
-  SOCKET_URL: __DEV__ ? 'http://192.168.1.84:5000' : 'https://your-api-domain.com',
+  SOCKET_URL: __DEV__ ? 'http://192.168.1.84:5000' : 'https://drpn-backend.onrender.com',
   
   // App constants
   DEFAULT_RADIUS: 10000, // 10km in meters
