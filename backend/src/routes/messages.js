@@ -172,10 +172,12 @@ router.post('/', [protect,
     // Populate sender info
     await message.populate('sender', 'name photos');
 
-    // Emit socket event
+    // Emit to the same room the socket handler uses (chatType:chatId -
+    // see socket/socketHandler.js) so clients get this over the socket
+    // whether the send came in over REST or the socket itself.
     const io = req.app.get('io');
     if (message.chatId) {
-      io.to(message.chatId).emit('new-message', message);
+      io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
     }
 
     res.status(201).json({

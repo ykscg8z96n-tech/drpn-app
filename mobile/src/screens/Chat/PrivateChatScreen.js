@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 
 const { width } = Dimensions.get('window');
@@ -24,13 +25,15 @@ const { width } = Dimensions.get('window');
 export default function PrivateChatScreen({ route, navigation }) {
   const { connectionId, otherUser } = route.params || {};
   const { user } = useAuth();
-  
+  const { socket } = useSocket();
+
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [otherUserData, setOtherUserData] = useState(otherUser || null);
+  const [chatRoomId, setChatRoomId] = useState(null);
   
   const flatListRef = useRef(null);
 
@@ -56,7 +59,10 @@ export default function PrivateChatScreen({ route, navigation }) {
       if (messagesResponse.data.success) {
         console.log('✅ Private messages loaded');
         const loadedMessages = messagesResponse.data.data || [];
-        
+        if (messagesResponse.data.chatInfo?.chatRoomId) {
+          setChatRoomId(messagesResponse.data.chatInfo.chatRoomId);
+        }
+
         // For iPhone style, newest messages at bottom (traditional chat order)
         setMessages(loadedMessages);
         
@@ -83,17 +89,6 @@ export default function PrivateChatScreen({ route, navigation }) {
         setLoading(false);
       }
     }
-      const endpoint = `/messages/private/${connectionId}`;
-  const messagesResponse = await api.get(endpoint);
-  
-  if (messagesResponse.data.success) {
-    console.log('✅ Private messages loaded');
-    console.log('📊 Messages count:', messagesResponse.data.data?.length || 0);
-    console.log('📋 First few messages:', messagesResponse.data.data?.slice(0, 3));
-    
-    const loadedMessages = messagesResponse.data.data || [];
-    setMessages(loadedMessages);
-  }
   }, [connectionId, user?.id]);
 
   // Set navigation header
@@ -123,6 +118,32 @@ export default function PrivateChatScreen({ route, navigation }) {
       }
     }, [loadMessages, connectionId])
   );
+
+  // Live updates: join this chat's canonical room (shared between both
+  // participants regardless of which PrivateConnection doc they're on)
+  // and append the other person's messages as they arrive. Own sends
+  // are skipped since they're already added optimistically below.
+  useEffect(() => {
+    if (!socket || !chatRoomId) return;
+
+    socket.emit('chat:join', { chatType: 'private', chatId: chatRoomId });
+
+    const handleNewMessage = (message) => {
+      if (message.chatId !== chatRoomId) return;
+      const senderId = message.sender?._id || message.sender;
+      if (senderId === user?.id) return;
+      setMessages(prev => [...prev, message]);
+      setTimeout(() => {
+        if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
+      }, 100);
+    };
+    socket.on('message:new', handleNewMessage);
+
+    return () => {
+      socket.emit('chat:leave', { chatType: 'private', chatId: chatRoomId });
+      socket.off('message:new', handleNewMessage);
+    };
+  }, [socket, chatRoomId, user?.id]);
 
   // Send message
   const sendMessage = async () => {

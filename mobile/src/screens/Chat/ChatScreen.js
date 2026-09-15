@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 
 const { width } = Dimensions.get('window');
@@ -24,7 +25,8 @@ const { width } = Dimensions.get('window');
 export default function ChatScreen({ route, navigation }) {
   const { chatId, eventId, eventName, eventType } = route.params || {};
   const { user } = useAuth();
-  
+  const { socket } = useSocket();
+
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -158,6 +160,30 @@ export default function ChatScreen({ route, navigation }) {
       }
     }, [loadMessages, finalChatId])
   );
+
+  // Live updates: join this chat's room and append messages from other
+  // participants as they arrive, instead of only seeing them on refocus.
+  // Own sends are skipped here since they're already added optimistically
+  // by sendMessage() below.
+  useEffect(() => {
+    if (!socket || !finalChatId || !eventType || eventType === 'private') return;
+
+    const roomChatId = `${eventType}-${finalChatId}`;
+    socket.emit('chat:join', { chatType: eventType, chatId: roomChatId });
+
+    const handleNewMessage = (message) => {
+      if (message.chatId !== roomChatId) return;
+      const senderId = message.sender?._id || message.sender;
+      if (senderId === user?.id) return;
+      setMessages(prev => [message, ...prev]);
+    };
+    socket.on('message:new', handleNewMessage);
+
+    return () => {
+      socket.emit('chat:leave', { chatType: eventType, chatId: roomChatId });
+      socket.off('message:new', handleNewMessage);
+    };
+  }, [socket, finalChatId, eventType, user?.id]);
 
   // Send message
   const sendMessage = async () => {

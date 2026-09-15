@@ -1,396 +1,224 @@
-// backend/src/socket/socketHandler.js (Update your existing file with this)
+// backend/src/socket/socketHandler.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const Match = require('../models/Match');
 const Message = require('../models/Message');
-const Event = require('../models/Event');
+const ChatCounter = require('../models/ChatCounter');
+const ChatMembership = require('../models/ChatMembership');
+const Participation = require('../models/Participation');
+const { hasChatAccess, checkEventAccess, checkPrivateAccess } = require('./chatAccess');
 
-// Store connected users
+// userId -> { socketId, user, connectedAt }. Fine for a single instance;
+// scaling to a second instance needs this behind the Socket.IO Redis
+// adapter instead (this Map only exists on one process).
 const connectedUsers = new Map();
 
-// Socket authentication middleware
 const authenticateSocket = async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
-    if (!token) {
-      console.error('Socket authentication failed: No token provided');
-      return next(new Error('No token provided'));
-    }
+    if (!token) return next(new Error('No token provided'));
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
-    
-    if (!user) {
-      console.error('Socket authentication failed: User not found');
-      return next(new Error('User not found'));
-    }
+    if (!user) return next(new Error('User not found'));
 
     socket.userId = user._id.toString();
     socket.user = user;
-    console.log(`✅ Socket authenticated for user: ${user.name} (${user._id})`);
     next();
   } catch (error) {
-    console.error('Socket authentication error:', error.message);
     next(new Error('Authentication failed'));
   }
 };
 
+const chatRoom = (chatType, chatId) => `${chatType}:${chatId}`;
+
 const handleConnection = (io) => {
-  // Apply authentication middleware
   io.use(authenticateSocket);
 
   io.on('connection', (socket) => {
-    console.log(`🔗 User ${socket.user.name} connected (Socket ID: ${socket.id})`);
-    
-    // Store connected user
     connectedUsers.set(socket.userId, {
       socketId: socket.id,
       user: socket.user,
       connectedAt: new Date()
     });
 
-    // Join user to their personal room (for notifications)
+    // Personal room, for future direct-to-user pushes (e.g. "you were
+    // accepted") independent of any chat room.
     socket.join(socket.userId);
-    console.log(`👤 User ${socket.userId} joined personal room`);
 
-    // Emit connection confirmation
-    socket.emit('connection-confirmed', {
-      userId: socket.userId,
-      timestamp: new Date()
-    });
+    socket.emit('connection-confirmed', { userId: socket.userId, timestamp: new Date() });
 
-    // Handle joining match rooms
-    socket.on('join-match', async (matchId) => {
+    socket.on('chat:join', async ({ chatType, chatId } = {}) => {
       try {
-        console.log(`🚪 User ${socket.userId} attempting to join match room: ${matchId}`);
-        
-        // Verify user has access to this match
-        const match = await Match.findById(matchId)
-          .populate('event', 'organizer admins');
-        
-        if (!match) {
-          console.error(`❌ Match not found: ${matchId}`);
-          socket.emit('error', { message: 'Match not found' });
+        if (!chatType || !chatId) return;
+        const allowed = await hasChatAccess(chatType, chatId, socket.userId);
+        if (!allowed) {
+          socket.emit('message:error', { reason: 'Not authorized for this chat' });
           return;
         }
-
-        // Check if user is part of this match
-        const hasAccess = await verifyMatchAccess(match, socket.userId);
-        if (!hasAccess) {
-          console.error(`🚫 User ${socket.userId} not authorized for match ${matchId}`);
-          socket.emit('error', { message: 'Not authorized for this match' });
-          return;
-        }
-
-        socket.join(`match-${matchId}`);
-        console.log(`✅ User ${socket.userId} joined match room: ${matchId}`);
-        
-        // Notify other participants in the match
-        socket.to(`match-${matchId}`).emit('user-joined', {
-          userId: socket.userId,
-          userName: socket.user.name,
-          timestamp: new Date()
-        });
-
-        // Confirm room join to the user
-        socket.emit('match-joined', {
-          matchId: matchId,
-          timestamp: new Date()
-        });
-
+        socket.join(chatRoom(chatType, chatId));
       } catch (error) {
-        console.error('Error joining match room:', error);
-        socket.emit('error', { message: 'Failed to join match room' });
+        console.error('chat:join error:', error);
       }
     });
 
-    // Handle leaving match rooms
-    socket.on('leave-match', (matchId) => {
-      socket.leave(`match-${matchId}`);
-      console.log(`🚪 User ${socket.userId} left match room: ${matchId}`);
-      
-      // Notify other participants
-      socket.to(`match-${matchId}`).emit('user-left', {
-        userId: socket.userId,
-        userName: socket.user.name,
-        timestamp: new Date()
-      });
-
-      // Confirm room leave to the user
-      socket.emit('match-left', {
-        matchId: matchId,
-        timestamp: new Date()
-      });
+    socket.on('chat:leave', ({ chatType, chatId } = {}) => {
+      if (!chatType || !chatId) return;
+      socket.leave(chatRoom(chatType, chatId));
     });
 
-    // Handle real-time message sending
-    socket.on('send-message', async (data) => {
+    socket.on('message:send', async ({ chatType, chatId, clientId, text } = {}) => {
       try {
-        const { matchId, message } = data;
-        console.log(`📤 User ${socket.userId} sending message to match ${matchId}`);
-        
-        // Verify match access
-        const match = await Match.findById(matchId)
-          .populate('event', 'organizer admins');
-        
-        if (!match) {
-          console.error(`❌ Match not found: ${matchId}`);
-          socket.emit('error', { message: 'Match not found' });
+        if (!chatType || !chatId || !text || !text.trim()) {
+          socket.emit('message:error', { clientId, reason: 'Invalid message' });
           return;
         }
 
-        const hasAccess = await verifyMatchAccess(match, socket.userId);
-        if (!hasAccess) {
-          console.error(`🚫 User ${socket.userId} not authorized for match ${matchId}`);
-          socket.emit('error', { message: 'Not authorized' });
-          return;
+        // A retried send reuses the same clientId - return the existing
+        // message instead of creating a duplicate.
+        if (clientId) {
+          const existing = await Message.findOne({ clientId }).populate('sender', 'name photos');
+          if (existing) {
+            socket.emit('message:ack', {
+              clientId,
+              _id: existing._id,
+              seq: existing.seq,
+              createdAt: existing.createdAt
+            });
+            return;
+          }
         }
 
-        // Create message in database
-        const newMessage = await Message.create({
-          match: matchId,
-          sender: socket.userId,
-          text: message.text
-        });
+        let message;
 
-        // Populate sender info
-        await newMessage.populate('sender', 'name photos');
+        if (chatType === 'event' || chatType === 'group') {
+          const event = await checkEventAccess(chatId, socket.userId);
+          if (!event) {
+            socket.emit('message:error', { clientId, reason: 'Not authorized for this chat' });
+            return;
+          }
 
-        // Update match last message time and unread counts
-        match.lastMessageAt = new Date();
-        if (socket.userId === match.individual.toString()) {
-          match.unreadCount.organizer += 1;
-        } else {
-          match.unreadCount.individual += 1;
-        }
-        await match.save();
-
-        console.log(`📨 Message created and broadcasting to match-${matchId}`);
-
-        // Broadcast to match room (including sender for confirmation)
-        io.to(`match-${matchId}`).emit('new-message', newMessage);
-        
-        console.log(`✅ Message sent successfully in match ${matchId}`);
-      } catch (error) {
-        console.error('Error sending message:', error);
-        socket.emit('error', { message: 'Failed to send message' });
-      }
-    });
-
-    // Handle typing indicators
-    socket.on('typing-start', (matchId) => {
-      console.log(`⌨️ User ${socket.userId} started typing in match ${matchId}`);
-      socket.to(`match-${matchId}`).emit('user-typing', {
-        userId: socket.userId,
-        userName: socket.user.name,
-        isTyping: true,
-        timestamp: new Date()
-      });
-    });
-
-    socket.on('typing-stop', (matchId) => {
-      console.log(`⌨️ User ${socket.userId} stopped typing in match ${matchId}`);
-      socket.to(`match-${matchId}`).emit('user-typing', {
-        userId: socket.userId,
-        userName: socket.user.name,
-        isTyping: false,
-        timestamp: new Date()
-      });
-    });
-
-    // Handle user status updates
-    socket.on('update-status', (status) => {
-      console.log(`📊 User ${socket.userId} updated status to: ${status}`);
-      
-      // Update user status in connected users map
-      if (connectedUsers.has(socket.userId)) {
-        const userData = connectedUsers.get(socket.userId);
-        userData.status = status;
-        userData.lastActivity = new Date();
-        connectedUsers.set(socket.userId, userData);
-      }
-      
-      // Broadcast status to relevant rooms (matches, etc.)
-      socket.broadcast.emit('user-status-update', {
-        userId: socket.userId,
-        status: status,
-        timestamp: new Date()
-      });
-    });
-
-    // Handle ping/pong for connection health
-    socket.on('ping', () => {
-      socket.emit('pong', { timestamp: new Date() });
-    });
-
-    // Handle disconnection
-    socket.on('disconnect', (reason) => {
-      console.log(`🔌 User ${socket.userId} disconnected: ${reason}`);
-      
-      // Remove from connected users
-      connectedUsers.delete(socket.userId);
-      
-      // Get all rooms this user was in
-      const rooms = Array.from(socket.rooms);
-      
-      // Notify all match rooms this user was in
-      rooms.forEach(room => {
-        if (room.startsWith('match-')) {
-          socket.to(room).emit('user-left', {
-            userId: socket.userId,
-            userName: socket.user.name,
-            reason: 'disconnected',
-            timestamp: new Date()
+          const seq = await ChatCounter.nextSeq(chatId);
+          message = await Message.create({
+            chatType,
+            chatId,
+            event: event._id,
+            sender: socket.userId,
+            text: text.trim(),
+            messageType: 'text',
+            clientId,
+            seq
           });
+
+          const participation = await Participation.findOne({
+            event: event._id,
+            participant: socket.userId,
+            status: 'accepted',
+            isArchived: false
+          });
+          if (participation) await participation.updateLastMessage();
+        } else if (chatType === 'private') {
+          const connection = await checkPrivateAccess(chatId, socket.userId);
+          if (!connection) {
+            socket.emit('message:error', { clientId, reason: 'Not authorized for this chat' });
+            return;
+          }
+
+          const seq = await ChatCounter.nextSeq(chatId);
+          message = await Message.create({
+            chatType: 'private',
+            chatId,
+            privateConnection: connection._id,
+            sender: socket.userId,
+            text: text.trim(),
+            messageType: 'text',
+            clientId,
+            seq
+          });
+
+          await connection.updateLastMessage();
+        } else {
+          socket.emit('message:error', { clientId, reason: 'Unknown chat type' });
+          return;
         }
-      });
 
-      console.log(`👋 User ${socket.userId} cleanup completed`);
+        await message.populate('sender', 'name photos');
+
+        socket.emit('message:ack', {
+          clientId,
+          _id: message._id,
+          seq: message.seq,
+          createdAt: message.createdAt
+        });
+        io.to(chatRoom(chatType, chatId)).emit('message:new', message);
+      } catch (error) {
+        // A concurrent retry with the same clientId can race past the
+        // existence check above; the unique index catches it here.
+        if (error.code === 11000 && error.keyPattern?.clientId && clientId) {
+          const existing = await Message.findOne({ clientId }).catch(() => null);
+          if (existing) {
+            socket.emit('message:ack', { clientId, _id: existing._id, seq: existing.seq, createdAt: existing.createdAt });
+            return;
+          }
+        }
+        console.error('message:send error:', error);
+        socket.emit('message:error', { clientId, reason: 'Failed to send message' });
+      }
     });
 
-    // Handle connection errors
-    socket.on('error', (error) => {
-      console.error(`🔴 Socket error for user ${socket.userId}:`, error);
-      
-      // Log error details for debugging
-      console.error('Error details:', {
-        userId: socket.userId,
-        socketId: socket.id,
-        error: error.message || error,
-        timestamp: new Date()
+    // Reconnect gap-fill: everything the client missed while its socket
+    // was down, in one round trip instead of a full history reload.
+    socket.on('message:sync', async ({ chatType, chatId, sinceSeq = 0 } = {}) => {
+      try {
+        if (!chatType || !chatId) return;
+        const allowed = await hasChatAccess(chatType, chatId, socket.userId);
+        if (!allowed) return;
+
+        const messages = await Message.find({ chatType, chatId, seq: { $gt: sinceSeq } })
+          .populate('sender', 'name photos')
+          .sort({ seq: 1 })
+          .limit(500);
+
+        socket.emit('message:sync-result', { chatType, chatId, messages });
+      } catch (error) {
+        console.error('message:sync error:', error);
+      }
+    });
+
+    socket.on('message:read', async ({ chatType, chatId, seq } = {}) => {
+      try {
+        if (!chatType || !chatId || typeof seq !== 'number') return;
+        await ChatMembership.markRead(socket.userId, chatType, chatId, seq);
+      } catch (error) {
+        console.error('message:read error:', error);
+      }
+    });
+
+    socket.on('typing:start', ({ chatType, chatId } = {}) => {
+      if (!chatType || !chatId) return;
+      socket.to(chatRoom(chatType, chatId)).emit('typing:update', {
+        chatId, userId: socket.userId, isTyping: true
       });
     });
 
-    // Handle custom events for debugging
-    socket.on('debug-info', () => {
-      socket.emit('debug-response', {
-        userId: socket.userId,
-        socketId: socket.id,
-        rooms: Array.from(socket.rooms),
-        connectedUsers: connectedUsers.size,
-        timestamp: new Date()
+    socket.on('typing:stop', ({ chatType, chatId } = {}) => {
+      if (!chatType || !chatId) return;
+      socket.to(chatRoom(chatType, chatId)).emit('typing:update', {
+        chatId, userId: socket.userId, isTyping: false
       });
+    });
+
+    socket.on('disconnect', () => {
+      connectedUsers.delete(socket.userId);
     });
   });
 
-  // Global connection error handler
   io.engine.on('connection_error', (err) => {
     console.error('🔴 Socket.IO connection error:', err);
   });
 };
 
-// Helper function to verify match access
-const verifyMatchAccess = async (match, userId) => {
-  try {
-    if (!match.event) {
-      console.error('Match has no associated event');
-      return false;
-    }
-    
-    const isIndividual = match.individual.toString() === userId;
-    const isOrganizer = match.event.organizer.toString() === userId;
-    const isAdmin = match.event.admins && match.event.admins.includes(userId);
-    
-    const hasAccess = isIndividual || isOrganizer || isAdmin;
-    
-    console.log(`🔍 Access check for match ${match._id}:`, {
-      userId,
-      isIndividual,
-      isOrganizer,
-      isAdmin,
-      hasAccess
-    });
-    
-    return hasAccess;
-  } catch (error) {
-    console.error('Error verifying match access:', error);
-    return false;
-  }
-};
+// Whether a user currently has a live socket connection - used to decide
+// whether a new message needs a push notification instead.
+const isUserOnline = (userId) => connectedUsers.has(userId.toString());
 
-// Function to send notification to user if they're online
-const sendNotificationToUser = (io, userId, eventName, data) => {
-  console.log(`📢 Sending notification to user ${userId}: ${eventName}`);
-  
-  if (connectedUsers.has(userId)) {
-    io.to(userId).emit(eventName, {
-      ...data,
-      timestamp: new Date()
-    });
-    console.log(`✅ Notification sent to online user ${userId}`);
-    return true;
-  } else {
-    console.log(`⚠️ User ${userId} is offline, notification not sent`);
-    return false;
-  }
-};
-
-// Function to get online users
-const getOnlineUsers = () => {
-  return Array.from(connectedUsers.entries()).map(([userId, data]) => ({
-    userId,
-    socketId: data.socketId,
-    user: {
-      id: data.user._id,
-      name: data.user.name,
-      email: data.user.email
-    },
-    connectedAt: data.connectedAt,
-    lastActivity: data.lastActivity || data.connectedAt,
-    status: data.status || 'online'
-  }));
-};
-
-// Function to check if user is online
-const isUserOnline = (userId) => {
-  return connectedUsers.has(userId);
-};
-
-// Function to get connection stats
-const getConnectionStats = () => {
-  return {
-    totalConnections: connectedUsers.size,
-    onlineUsers: getOnlineUsers(),
-    timestamp: new Date()
-  };
-};
-
-// Function to broadcast to all connected users
-const broadcastToAll = (io, eventName, data) => {
-  console.log(`📡 Broadcasting ${eventName} to all connected users`);
-  io.emit(eventName, {
-    ...data,
-    timestamp: new Date()
-  });
-};
-
-// Function to broadcast to users in a specific room
-const broadcastToRoom = (io, room, eventName, data) => {
-  console.log(`📡 Broadcasting ${eventName} to room: ${room}`);
-  io.to(room).emit(eventName, {
-    ...data,
-    timestamp: new Date()
-  });
-};
-
-// Function to send match notification
-const sendMatchNotification = (io, userId, matchData) => {
-  return sendNotificationToUser(io, userId, 'match-accepted', matchData);
-};
-
-// Function to send applicant notification
-const sendApplicantNotification = (io, organizerId, applicantData) => {
-  return sendNotificationToUser(io, organizerId, 'new-applicant', applicantData);
-};
-
-module.exports = {
-  handleConnection,
-  sendNotificationToUser,
-  sendMatchNotification,
-  sendApplicantNotification,
-  getOnlineUsers,
-  isUserOnline,
-  getConnectionStats,
-  broadcastToAll,
-  broadcastToRoom
-};
+module.exports = { handleConnection, isUserOnline };
