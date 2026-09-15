@@ -220,7 +220,7 @@ function ProfileStack() {
 }
 
 function TabNavigatorContent() {
-  const { selectedFilter, openFilterDrawer } = useFilter();
+  const { selectedFilter } = useFilter();
   const insets = useSafeAreaInsets();
 
   // Categories for icon mapping
@@ -287,20 +287,6 @@ function TabNavigatorContent() {
           paddingVertical: 0,
         },
         headerShown: false,
-      })}
-      screenListeners={({ navigation, route }) => ({
-        tabPress: (e) => {
-          if (route.name === 'LFG') {
-            // Check if we're already on the LFG tab
-            const currentRoute = navigation.getState().routes[navigation.getState().index];
-            if (currentRoute.name === 'LFG') {
-              // Already on LFG tab - open filter drawer
-              e.preventDefault();
-              openFilterDrawer();
-            }
-            // If not on LFG tab, let normal navigation happen
-          }
-        }
       })}
     >
       <Tab.Screen name="LFG" component={SwipeStack} />
