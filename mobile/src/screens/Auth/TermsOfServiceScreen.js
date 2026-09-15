@@ -16,7 +16,7 @@ export default function TermsOfServiceScreen() {
         <Text style={styles.headerTitle}>Terms of Service</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <Text style={styles.updated}>Last updated: this is an early beta build</Text>
 
         <Text style={styles.paragraph}>
@@ -96,6 +96,9 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 28,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 20,
