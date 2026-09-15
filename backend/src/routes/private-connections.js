@@ -66,14 +66,19 @@ router.post('/invite', [protect,
       });
     }
 
-    // Check if connection already exists
+    // Already chatting with this person - hand back the existing
+    // connection instead of erroring, so tapping "Chat" again just opens
+    // the same thread rather than dead-ending.
     const existingConnection = await PrivateConnection.connectionExists(req.user.id, toUserId);
     if (existingConnection) {
-      return res.status(400).json({
-        success: false,
-        message: existingConnection.status === 'pending' 
-          ? 'Invite already sent' 
-          : 'Private connection already exists'
+      await existingConnection.populate([
+        { path: 'otherUser', select: 'name photos' },
+        { path: 'originEvent', select: 'name type' }
+      ]);
+      return res.status(200).json({
+        success: true,
+        data: existingConnection,
+        message: 'Chat already exists'
       });
     }
 
@@ -86,20 +91,28 @@ router.post('/invite', [protect,
       });
     }
 
-    // Create private connection invite
-    const connection = await PrivateConnection.sendInvite(
-      req.user.id,
-      toUserId,
-      originEventId,
-      message
-    );
+    // Both people already know each other from a shared event's roster -
+    // there's no one to actually review a "request", so start the chat
+    // immediately rather than creating a pending invite the recipient has
+    // no UI to see or accept (nothing in the app surfaces
+    // GET /private-connections/pending). A pending connection here just
+    // silently blocked the recipient's side from ever starting the same
+    // chat themselves ("Invite already sent").
+    const connection = await PrivateConnection.create({
+      participant: toUserId,
+      otherUser: req.user.id,
+      originEvent: originEventId,
+      status: 'accepted',
+      initiatedBy: 'other_user',
+      invite: { sentAt: new Date(), message, acceptedAt: new Date() }
+    });
 
     await connection.populate([
       { path: 'otherUser', select: 'name photos' },
       { path: 'originEvent', select: 'name type' }
     ]);
 
-    console.log(`✅ Private invite sent to ${recipient.name}`);
+    console.log(`✅ Private chat started with ${recipient.name}`);
 
     // TODO: Send push notification to recipient
     // TODO: Emit socket event to recipient
@@ -107,7 +120,7 @@ router.post('/invite', [protect,
     res.status(201).json({
       success: true,
       data: connection,
-      message: `Private chat invite sent to ${recipient.name}`
+      message: `Private chat started with ${recipient.name}`
     });
 
   } catch (error) {
