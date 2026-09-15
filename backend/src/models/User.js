@@ -188,14 +188,22 @@ userSchema.index({ email: 1 });
 userSchema.index({ isOrganizer: 1 });
 userSchema.index({ lastActive: -1 });
 
-// Hash password before saving
+// Hash password before saving. The missing `return` here used to be a
+// severe bug: every save() of a user document - not just ones that
+// changed the password - fell through into re-hashing whatever was
+// already in `password` (an existing bcrypt hash) as if it were
+// plaintext. Since login itself calls user.save() (to update
+// lastActive), an account's password got silently corrupted the moment
+// after its first successful login, locking the user out permanently
+// even with the correct password.
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
-  
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
 // Match user password

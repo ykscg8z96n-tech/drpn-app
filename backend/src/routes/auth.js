@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
@@ -143,6 +144,43 @@ router.post('/login', authLimiter, [
     });
   } catch (error) {
     console.error('❌ Login error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/forgot-password
+// @desc    TEMPORARY pre-launch password reset. There's no email-sending
+//          infrastructure yet, so this generates a new password and
+//          returns it directly in the response instead of emailing it -
+//          only acceptable because there are no real users yet. Revisit
+//          before real launch: a real reset must email a link, never
+//          hand back a working password in an API response.
+// @access  Public
+router.post('/forgot-password', authLimiter, [
+  body('email').isEmail().normalizeEmail()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const user = await User.findOne({ email: req.body.email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with that email' });
+    }
+
+    const temporaryPassword = crypto.randomBytes(6).toString('hex');
+    user.password = temporaryPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      temporaryPassword,
+      message: 'Use this temporary password to log in, then change it from your profile.'
+    });
+  } catch (error) {
+    console.error('❌ Forgot-password error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
