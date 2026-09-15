@@ -4,7 +4,6 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Message = require('../models/Message');
 const ChatCounter = require('../models/ChatCounter');
-const ChatMembership = require('../models/ChatMembership');
 const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const Event = require('../models/Event');
@@ -275,15 +274,6 @@ router.get('/event/:eventId', protect, async (req, res) => {
       console.log(`⚠️ Mark read error (non-critical):`, markError.message);
     }
 
-    // Update participation if user is participant
-    if (hasParticipation) {
-      try {
-        await participation.markChatRead();
-      } catch (partError) {
-        console.log(`⚠️ Participation update error (non-critical):`, partError.message);
-      }
-    }
-
     // An event-invite card's accept/pass buttons need to reflect this
     // viewer's actual status (already joined, already passed, or it's
     // their own event) - computed here rather than trusted from the
@@ -410,13 +400,6 @@ router.get('/private/:connectionId', protect, async (req, res) => {
       console.log('⚠️ Mark read error (non-critical):', markError.message);
     }
 
-    // Update connection unread count
-    try {
-      await connection.markChatRead();
-    } catch (connectionError) {
-      console.log('⚠️ Connection update error (non-critical):', connectionError.message);
-    }
-
     const otherUser = connection.participant._id.toString() === req.user.id
       ? connection.otherUser
       : connection.participant;
@@ -493,13 +476,7 @@ router.post('/read', [protect,
 
     const { chatType, chatId } = req.body;
 
-    // Legacy per-message read tracking, kept for the older readBy-based
-    // reads elsewhere until they're migrated to the ChatMembership cursor.
     await Message.markChatAsRead(chatType, chatId, req.user.id);
-
-    // Advance this user's read cursor to the chat's current head.
-    const counter = await ChatCounter.findOne({ chatId });
-    await ChatMembership.markRead(req.user.id, chatType, chatId, counter?.lastSeq || 0);
 
     res.json({
       success: true,
@@ -517,28 +494,34 @@ router.post('/read', [protect,
 // @access  Private
 router.get('/unread-count', protect, async (req, res) => {
   try {
-    // Get event/group chat unread counts
+    // chatParticipation.unreadCount is never incremented by anything -
+    // compute real counts from Message's own readBy tracking instead,
+    // same as GET /participations and GET /private-connections do.
     const participations = await Participation.find({
       participant: req.user.id,
       status: 'accepted',
       isArchived: false
-    }).populate('event', 'name type');
+    }).populate('event', 'type');
 
-    const eventUnread = participations.reduce((total, p) => {
-      return total + (p.chatParticipation.unreadCount || 0);
-    }, 0);
+    const eventUnread = (await Promise.all(participations.map(p => {
+      if (!p.event) return 0;
+      const chatId = `${p.event.type}-${p.event._id}`;
+      return Message.getUnreadCount(p.event.type, chatId, req.user.id);
+    }))).reduce((total, count) => total + count, 0);
 
     // Get private chat unread counts
     const privateConnections = await PrivateConnection.find({
-      participant: req.user.id,
+      $or: [{ participant: req.user.id }, { otherUser: req.user.id }],
       status: 'accepted',
       isArchived: false,
       'chatParticipation.isBlocked': false
     });
 
-    const privateUnread = privateConnections.reduce((total, c) => {
-      return total + (c.chatParticipation.unreadCount || 0);
-    }, 0);
+    const privateUnread = (await Promise.all(privateConnections.map(c => {
+      const uids = [c.participant.toString(), c.otherUser.toString()].sort();
+      const chatId = `private-${uids[0]}-${uids[1]}`;
+      return Message.getUnreadCount('private', chatId, req.user.id);
+    }))).reduce((total, count) => total + count, 0);
 
     res.json({
       success: true,

@@ -132,12 +132,10 @@ router.get('/', protect, async (req, res) => {
       return new Date(bTime) - new Date(aTime);
     });
 
-    // chatParticipation.unreadCount is never actually incremented when a
-    // message comes in (nothing calls updateUnreadCount on the other
-    // participants) - it's permanently 0. Computing it from Message's own
-    // readBy tracking here instead of trusting that stale counter, and
-    // exposing it as a plain `unreadCount` (mobile's MatchesScreen already
-    // reads item.unreadCount, not item.chatParticipation.unreadCount).
+    // Unread counts are computed from Message's own readBy tracking (the
+    // one canonical mechanism - see Message.getUnreadCount/markChatAsRead),
+    // exposed as a plain `unreadCount` (mobile's MatchesScreen reads
+    // item.unreadCount).
     await Promise.all(allItems.map(async (item) => {
       const eventDoc = item.event;
       if (!eventDoc) return;
