@@ -19,6 +19,16 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 6
   },
+  // Hashed reset token + expiry for the forgot-password email flow.
+  // The raw token is only ever emailed to the user, never stored.
+  resetPasswordToken: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpires: {
+    type: Date,
+    select: false
+  },
   name: {
     type: String,
     required: true,

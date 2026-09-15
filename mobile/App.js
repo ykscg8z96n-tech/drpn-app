@@ -32,6 +32,11 @@ const linking = {
             }
           }
         }
+      },
+      Auth: {
+        screens: {
+          ResetPassword: 'reset-password'
+        }
       }
     }
   }

@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 // Screen imports
 import LoginScreen from '../screens/Auth/LoginScreen';
 import SignupScreen from '../screens/Auth/SignupScreen';
+import ResetPasswordScreen from '../screens/Auth/ResetPasswordScreen';
 
 const Stack = createStackNavigator();
 
@@ -43,9 +44,16 @@ export default function AuthNavigator() {
           animationTypeForReplace: 'push',
         }}
       />
-      <Stack.Screen 
-        name="Signup" 
+      <Stack.Screen
+        name="Signup"
         component={SignupScreen}
+        options={{
+          animationTypeForReplace: 'push',
+        }}
+      />
+      <Stack.Screen
+        name="ResetPassword"
+        component={ResetPasswordScreen}
         options={{
           animationTypeForReplace: 'push',
         }}
