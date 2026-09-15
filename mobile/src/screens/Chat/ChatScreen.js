@@ -121,6 +121,13 @@ export default function ChatScreen({ route, navigation }) {
 
   const handlePassInvite = (message) => {
     setInviteStatuses(prev => ({ ...prev, [message._id]: 'passed' }));
+    const eventId = message.systemMessage?.data?.eventId;
+    if (eventId) {
+      api.post(`/events/${eventId}/pass-invite`).catch(() => {
+        // Non-critical - worst case the card re-offers the buttons after
+        // a reload, no need to surface an error for a dismiss.
+      });
+    }
   };
 
   // Load event data and messages
@@ -159,6 +166,19 @@ export default function ChatScreen({ route, navigation }) {
           // Messages already come back in chronological order - keep it,
           // newest at the bottom like a normal text thread.
           setMessages(loadedMessages);
+
+          // Seed each event-invite card's accept/pass state from the
+          // server-computed viewerStatus, so a card someone already
+          // joined/passed (or their own event) doesn't offer the buttons
+          // again after a reload.
+          const seededStatuses = {};
+          loadedMessages.forEach(m => {
+            const status = m.systemMessage?.data?.viewerStatus;
+            if (status) seededStatuses[m._id] = status;
+          });
+          if (Object.keys(seededStatuses).length) {
+            setInviteStatuses(prev => ({ ...seededStatuses, ...prev }));
+          }
 
           setTimeout(() => {
             if (flatListRef.current && loadedMessages.length > 0) {
@@ -410,7 +430,12 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.inviteCardTapHint}>Tap to view details</Text>
         </TouchableOpacity>
 
-        {status === 'joined' ? (
+        {status === 'own' ? (
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="person" size={18} color="#999999" />
+            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Your event</Text>
+          </View>
+        ) : status === 'joined' ? (
           <View style={styles.inviteCardResult}>
             <Ionicons name="checkmark-circle" size={20} color="#00C853" />
             <Text style={styles.inviteCardResultText}>You're in!</Text>

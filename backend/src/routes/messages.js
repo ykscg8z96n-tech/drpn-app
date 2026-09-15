@@ -284,6 +284,34 @@ router.get('/event/:eventId', protect, async (req, res) => {
       }
     }
 
+    // An event-invite card's accept/pass buttons need to reflect this
+    // viewer's actual status (already joined, already passed, or it's
+    // their own event) - computed here rather than trusted from the
+    // client, and against the invited event (not this group chat's own
+    // event/organizer).
+    const inviteMessages = messages.filter(m => m.systemMessage?.type === 'event_invite');
+    if (inviteMessages.length) {
+      const invitedEventIds = [...new Set(inviteMessages.map(m => m.systemMessage.data.eventId?.toString()))];
+      const invitedEvents = await Event.find({ _id: { $in: invitedEventIds } })
+        .select('organizer applicants passedBy');
+      const invitedEventsById = new Map(invitedEvents.map(e => [e._id.toString(), e]));
+
+      for (const message of inviteMessages) {
+        const invitedEvent = invitedEventsById.get(message.systemMessage.data.eventId?.toString());
+        let viewerStatus = null;
+        if (invitedEvent) {
+          if (invitedEvent.organizer.toString() === userId) {
+            viewerStatus = 'own';
+          } else if (invitedEvent.applicants.some(a => a.userId.toString() === userId && a.status === 'accepted')) {
+            viewerStatus = 'joined';
+          } else if (invitedEvent.passedBy.some(id => id.toString() === userId)) {
+            viewerStatus = 'passed';
+          }
+        }
+        message.systemMessage.data.viewerStatus = viewerStatus;
+      }
+    }
+
     res.json({
       success: true,
       data: messages.reverse(),

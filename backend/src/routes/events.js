@@ -41,21 +41,63 @@ async function recordParticipation(event, userId, joinMethod) {
 }
 
 async function notifyGroupIfJustFilled(event, req, justBecameFull) {
-  if (!justBecameFull || !event.inviteGroupId) return;
+  if (!justBecameFull || !event.inviteGroupIds?.length) return;
   try {
     const botId = await getBotUserId();
-    const message = await Message.createEventMessage(
-      event.inviteGroupId,
-      botId,
-      `🎉 "${event.name}" is now filled!`,
-      'group'
-    );
     const io = req.app.get('io');
-    if (io) {
-      io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+    for (const groupId of event.inviteGroupIds) {
+      const message = await Message.createEventMessage(
+        groupId,
+        botId,
+        `🎉 "${event.name}" is now filled!`,
+        'group'
+      );
+      if (io) {
+        io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+      }
     }
   } catch (error) {
     console.error('⚠️ Failed to post event-filled notice to group chat:', error);
+  }
+}
+
+// Drops a clickable event-invite card into a group's chat so members can
+// see it and join with one tap (POST /:id/quick-join), instead of the
+// organizer-approval path strangers go through. Used both at creation
+// and when a group is added to an existing event via PUT /:id.
+async function postEventInviteCard(event, group, organizerId, req) {
+  const inviteCode = event.generateInviteCode(organizerId);
+  await event.save();
+
+  const groupChatId = `group-${group._id}`;
+  const seq = await ChatCounter.nextSeq(groupChatId);
+  const chatMessage = await Message.create({
+    chatType: 'group',
+    chatId: groupChatId,
+    event: group._id,
+    sender: organizerId,
+    text: `New event "${event.name}" - tap to view and join`,
+    messageType: 'system',
+    systemMessage: {
+      type: 'event_invite',
+      data: {
+        eventId: event._id,
+        eventName: event.name,
+        category: event.category,
+        eventDate: event.eventDate,
+        location: event.location,
+        capacity: event.capacity,
+        currentAttendees: event.currentAttendees,
+        inviteCode
+      }
+    },
+    seq
+  });
+  await chatMessage.populate('sender', 'name photos');
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`${chatMessage.chatType}:${chatMessage.chatId}`).emit('message:new', chatMessage);
   }
 }
 
@@ -275,13 +317,18 @@ router.post('/', [protect,
       });
     }
     
-    // If auto-inviting a group, the requester has to actually run that
-    // group - otherwise anyone could dump an invite code into a chat they
-    // don't belong to.
-    let inviteGroup = null;
-    if (req.body.inviteGroupId) {
-      inviteGroup = await Event.findById(req.body.inviteGroupId);
-      if (!inviteGroup || inviteGroup.type !== 'group' || !inviteGroup.canUserManage(req.user.id)) {
+    // If auto-inviting groups, the requester has to actually run each one
+    // - otherwise anyone could dump an invite card into a chat they don't
+    // belong to.
+    const requestedGroupIds = Array.isArray(req.body.inviteGroupIds)
+      ? req.body.inviteGroupIds
+      : (req.body.inviteGroupId ? [req.body.inviteGroupId] : []); // back-compat with the old singular field
+    let inviteGroups = [];
+    if (requestedGroupIds.length) {
+      inviteGroups = await Event.find({ _id: { $in: requestedGroupIds } });
+      const invalid = inviteGroups.length !== requestedGroupIds.length
+        || inviteGroups.some(g => g.type !== 'group' || !g.canUserManage(req.user.id));
+      if (invalid) {
         return res.status(403).json({
           success: false,
           message: 'You can only auto-invite a group you organize'
@@ -333,7 +380,7 @@ router.post('/', [protect,
       categories: req.body.categories?.length
         ? Array.from(new Set([req.body.category, ...req.body.categories]))
         : undefined,
-      inviteGroupId: inviteGroup?._id || null,
+      inviteGroupIds: inviteGroups.map(g => g._id),
       organizer: req.user.id,
       admins: [req.user.id],
       // The organizer is themselves a member/attendee from the moment the
@@ -353,46 +400,14 @@ router.post('/', [protect,
       console.log('👤 Updated user to organizer status');
     }
 
-    // Drop a clickable event-invite card into the group's chat so members
-    // can see it and join with one tap (POST /:id/quick-join) - group
-    // members join directly instead of applying like strangers.
-    if (inviteGroup) {
+    // Drop a clickable event-invite card into each invited group's chat
+    // so members can see it and join with one tap (POST /:id/quick-join)
+    // - group members join directly instead of applying like strangers.
+    for (const group of inviteGroups) {
       try {
-        const inviteCode = event.generateInviteCode(req.user.id);
-        await event.save();
-
-        const groupChatId = `group-${inviteGroup._id}`;
-        const seq = await ChatCounter.nextSeq(groupChatId);
-        const chatMessage = await Message.create({
-          chatType: 'group',
-          chatId: groupChatId,
-          event: inviteGroup._id,
-          sender: req.user.id,
-          text: `New event "${event.name}" - tap to view and join`,
-          messageType: 'system',
-          systemMessage: {
-            type: 'event_invite',
-            data: {
-              eventId: event._id,
-              eventName: event.name,
-              category: event.category,
-              eventDate: event.eventDate,
-              location: event.location,
-              capacity: event.capacity,
-              currentAttendees: event.currentAttendees,
-              inviteCode
-            }
-          },
-          seq
-        });
-        await chatMessage.populate('sender', 'name photos');
-
-        const io = req.app.get('io');
-        if (io) {
-          io.to(`${chatMessage.chatType}:${chatMessage.chatId}`).emit('message:new', chatMessage);
-        }
+        await postEventInviteCard(event, group, req.user.id, req);
       } catch (inviteError) {
-        console.error('⚠️ Failed to post invite code to group chat:', inviteError);
+        console.error('⚠️ Failed to post invite card to group chat:', inviteError);
         // Event itself was created successfully - don't fail the request.
       }
     }
@@ -505,6 +520,28 @@ router.put('/:id', [protect,
       }
     });
 
+    // inviteGroupIds needs its own validation (each id has to be a group
+    // this user actually organizes) and drives posting a new invite card
+    // to any group that's newly added here - handled separately from the
+    // plain field copy above.
+    let newlyInvitedGroups = [];
+    const requestedGroupIds = Array.isArray(req.body.inviteGroupIds)
+      ? req.body.inviteGroupIds
+      : (req.body.inviteGroupId !== undefined ? [req.body.inviteGroupId].filter(Boolean) : undefined);
+    if (requestedGroupIds !== undefined) {
+      const requestedGroups = requestedGroupIds.length
+        ? await Event.find({ _id: { $in: requestedGroupIds } })
+        : [];
+      const invalid = requestedGroups.length !== requestedGroupIds.length
+        || requestedGroups.some(g => g.type !== 'group' || !g.canUserManage(req.user.id));
+      if (invalid) {
+        return res.status(403).json({ success: false, message: 'You can only auto-invite a group you organize' });
+      }
+      const existingIds = new Set((event.inviteGroupIds || []).map(id => id.toString()));
+      newlyInvitedGroups = requestedGroups.filter(g => !existingIds.has(g._id.toString()));
+      updates.inviteGroupIds = requestedGroupIds;
+    }
+
     // Keep categories in sync with the primary category, same as on create.
     if (updates.categories?.length) {
       const primary = updates.category || event.category;
@@ -530,7 +567,17 @@ router.put('/:id', [protect,
       updates,
       { new: true, runValidators: true }
     ).populate('organizer', 'name photos');
-    
+
+    // Only post to groups that weren't already invited - re-editing other
+    // fields shouldn't spam the chat with a duplicate card.
+    for (const group of newlyInvitedGroups) {
+      try {
+        await postEventInviteCard(updatedEvent, group, req.user.id, req);
+      } catch (inviteError) {
+        console.error('⚠️ Failed to post invite card to group chat:', inviteError);
+      }
+    }
+
     res.json({
       success: true,
       data: updatedEvent
@@ -848,12 +895,12 @@ router.post('/:id/quick-join', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
 
-    if (!event.inviteGroupId) {
+    if (!event.inviteGroupIds?.length) {
       return res.status(403).json({ success: false, message: 'This event has no group invite to accept' });
     }
 
-    const group = await Event.findById(event.inviteGroupId);
-    const isGroupMember = !!group && (
+    const groups = await Event.find({ _id: { $in: event.inviteGroupIds } });
+    const isGroupMember = groups.some(group =>
       group.organizer.toString() === req.user.id
       || group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
     );
@@ -906,6 +953,23 @@ router.post('/:id/quick-join', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/events/:id/pass-invite
+// @desc    Dismiss an event_invite chat card - records the pass so the
+//          card can't be re-accepted/re-passed after a chat reload.
+// @access  Private
+router.post('/:id/pass-invite', protect, async (req, res) => {
+  try {
+    await Event.updateOne(
+      { _id: req.params.id },
+      { $addToSet: { passedBy: req.user.id } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error in pass-invite:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   POST /api/events/join/:code
 // @desc    Join event using invite code
 // @access  Private
@@ -939,9 +1003,9 @@ router.post('/join/:code', protect, async (req, res) => {
     // directly - both skip the organizer-approval path strangers go
     // through below. Groups have no hard capacity to gate on.
     let joinsDirectly = event.type === 'group';
-    if (!joinsDirectly && event.inviteGroupId) {
-      const group = await Event.findById(event.inviteGroupId);
-      joinsDirectly = !!group && (
+    if (!joinsDirectly && event.inviteGroupIds?.length) {
+      const groups = await Event.find({ _id: { $in: event.inviteGroupIds } });
+      joinsDirectly = groups.some(group =>
         group.organizer.toString() === req.user.id ||
         group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
       );
