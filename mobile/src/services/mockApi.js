@@ -32,6 +32,10 @@ export function installMockApi(api) {
   mock.onPut(/\/users\/photos\/[\w-]+\/primary$/).reply(() => ok(mockUser.photos));
   mock.onDelete(/\/users\/photos\/[\w-]+$/).reply(() => ok(mockUser.photos));
   mock.onPost('/users/swipe').reply(() => ok({ matched: false }));
+  // Must come before the catch-all GET /users/:id below, or that would
+  // swallow this path too.
+  mock.onGet('/users/my-applications').reply(() => ok([]));
+  mock.onDelete(/\/users\/my-applications\/[\w-]+$/).reply(() => ok({}));
   mock.onGet(/\/users\/(?!profile)[\w-]+$/).reply(() => ok(mockUser));
 
   mock.onGet('/events/nearby').reply(() => ok(mockEvents));

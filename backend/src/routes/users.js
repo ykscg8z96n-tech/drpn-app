@@ -4,6 +4,8 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Event = require('../models/Event');
+const Match = require('../models/Match');
+const Participation = require('../models/Participation');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -70,6 +72,79 @@ router.put('/profile', [protect,
     ).select('-password');
 
     res.json({ success: true, data: user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/users/my-applications
+// @desc    Get events/groups the current user has applied to (any status),
+//          so they can see what they're waiting on and withdraw if needed
+// @access  Private
+router.get('/my-applications', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).populate({
+      path: 'eventsJoined.eventId',
+      select: 'name type category photos eventDate location capacity currentAttendees groupSize organizer isArchived',
+      populate: { path: 'organizer', select: 'name' }
+    });
+
+    const applications = user.eventsJoined
+      .filter(entry => entry.eventId && !entry.eventId.isArchived)
+      .map(entry => ({
+        event: entry.eventId,
+        status: entry.status,
+        joinedAt: entry.joinedAt
+      }))
+      .sort((a, b) => new Date(b.joinedAt) - new Date(a.joinedAt));
+
+    res.json({ success: true, data: applications });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/users/my-applications/:eventId
+// @desc    Withdraw an application - pending or already accepted. Cleans
+//          up the applicant entry, this user's eventsJoined record, and
+//          (if it had been accepted) the resulting Match/Participation
+//          and capacity count, so a withdrawal after acceptance frees the
+//          spot back up the same as never having joined.
+// @access  Private
+router.delete('/my-applications/:eventId', protect, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+
+    const applicantIndex = event.applicants.findIndex(
+      app => app.userId.toString() === req.user.id
+    );
+    if (applicantIndex === -1) {
+      return res.status(404).json({ success: false, message: 'No application found for this event' });
+    }
+
+    const wasAccepted = event.applicants[applicantIndex].status === 'accepted';
+    event.applicants.splice(applicantIndex, 1);
+    if (wasAccepted && event.type === 'event') {
+      event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+    }
+    await event.save();
+
+    await User.findByIdAndUpdate(req.user.id, {
+      $pull: { eventsJoined: { eventId } }
+    });
+
+    if (wasAccepted) {
+      await Match.deleteOne({ individual: req.user.id, event: eventId });
+      await Participation.deleteOne({ event: eventId, participant: req.user.id });
+    }
+
+    res.json({ success: true, message: 'Application withdrawn' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server error' });
