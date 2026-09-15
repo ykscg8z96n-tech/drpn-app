@@ -405,6 +405,44 @@ router.post('/', [protect,
   }
 });
 
+// @route   POST /api/events/:id/photos
+// @desc    Upload a custom photo for an event/group (organizer/admin only).
+//          The create/edit screens send a picked image as `eventImage`, a
+//          plain string field the Event schema has no place for - it was
+//          silently dropped on save, which is why a custom photo never
+//          actually replaced the category's stock image. Uploading here,
+//          right after create/update, is the fix.
+// @access  Private
+router.post('/:id/photos', [protect, upload.array('photos', 1)], async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No photo uploaded' });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+
+    if (!event.canUserManage(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const newPhotos = req.files.map(file => ({
+      url: file.path,
+      publicId: file.filename
+    }));
+
+    event.photos.push(...newPhotos);
+    await event.save();
+
+    res.json({ success: true, data: event.photos });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   PUT /api/events/:id
 // @desc    Update an event (organizer only) - UPDATED VALIDATION
 // @access  Private
@@ -462,7 +500,10 @@ router.put('/:id', [protect,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    // Surfacing the real message here (rather than the generic "Server
+    // error" other routes use) while we're still pre-launch and actively
+    // debugging - revisit hiding this again before real users are on it.
+    res.status(500).json({ success: false, message: error.message || 'Server error' });
   }
 });
 
