@@ -71,6 +71,16 @@ router.post('/invite', [protect,
     // the same thread rather than dead-ending.
     const existingConnection = await PrivateConnection.connectionExists(req.user.id, toUserId);
     if (existingConnection) {
+      // A connection created before chats started immediately (or
+      // through some other still-pending path) would otherwise get
+      // handed back as-is - GET /messages/private/:id requires
+      // status 'accepted', so opening it would 403 with "Not
+      // authorized" despite the connection existing.
+      if (existingConnection.status !== 'accepted') {
+        existingConnection.status = 'accepted';
+        existingConnection.invite.acceptedAt = new Date();
+        await existingConnection.save();
+      }
       await existingConnection.populate([
         { path: 'otherUser', select: 'name photos' },
         { path: 'originEvent', select: 'name type' }
