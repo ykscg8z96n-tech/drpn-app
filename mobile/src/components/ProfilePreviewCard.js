@@ -4,8 +4,10 @@
 // carousel, name/age, About - reused wherever someone else's profile
 // needs to be shown the same way (e.g. tapping a roster/pending row).
 import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+const { height } = Dimensions.get('window');
 
 const calculateAge = (birthDate) => {
   if (!birthDate) return null;
@@ -102,8 +104,7 @@ const styles = StyleSheet.create({
   },
   previewImageContainer: {
     position: 'relative',
-    width: '100%',
-    aspectRatio: 1,
+    height: height * 0.6,
     backgroundColor: '#1A1A1A',
   },
   previewImage: {
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
   },
   activeCarouselIndicator: {
     backgroundColor: 'white',
-    width: 24,
+    width: 20,
   },
   previewContent: {
     padding: 20,
