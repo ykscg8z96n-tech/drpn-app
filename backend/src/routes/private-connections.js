@@ -35,21 +35,31 @@ router.post('/invite', [protect,
       });
     }
 
-    // Check if both users participated in the same event
-    const [senderParticipation, recipientParticipation] = await Promise.all([
-      Participation.findOne({
+    // Check if both users are part of the same event - either as an
+    // accepted participant, or as its organizer (who never gets their own
+    // Participation record, since that's tracked on Event.organizer
+    // instead).
+    const event = await Event.findById(originEventId).select('organizer');
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+
+    const isPartOfEvent = async (userId) => {
+      if (event.organizer.toString() === userId) return true;
+      const participation = await Participation.findOne({
         event: originEventId,
-        participant: req.user.id,
+        participant: userId,
         status: 'accepted'
-      }),
-      Participation.findOne({
-        event: originEventId,
-        participant: toUserId,
-        status: 'accepted'
-      })
+      });
+      return !!participation;
+    };
+
+    const [senderIsPart, recipientIsPart] = await Promise.all([
+      isPartOfEvent(req.user.id),
+      isPartOfEvent(toUserId)
     ]);
 
-    if (!senderParticipation || !recipientParticipation) {
+    if (!senderIsPart || !recipientIsPart) {
       return res.status(403).json({
         success: false,
         message: 'Both users must be participants in the same event to connect privately'
