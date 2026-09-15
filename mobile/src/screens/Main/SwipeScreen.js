@@ -317,7 +317,14 @@ export default function SwipeScreen({ navigation }) {
     );
   }
 
-  if (events.length === 0) {
+  // Once cardIndex reaches the end of the list, react-native-deck-swiper
+  // has no bounds checking of its own for further interaction (a button
+  // press, a stray gesture) - it throws, and with no error boundary that
+  // tears down the whole page to a blank white screen. Unmounting the
+  // Swiper and showing the same empty state used for a genuinely empty
+  // list sidesteps that entirely, rather than trying to guard every way
+  // of poking a swiper that has nothing left to show.
+  if (events.length === 0 || cardIndex >= events.length) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.emptyContainer}>
@@ -617,7 +624,7 @@ export default function SwipeScreen({ navigation }) {
           </Animated.View>
           <TouchableOpacity
             style={[styles.button]}
-            onPress={openFilterDrawer}
+            onPress={() => (showFilterDrawer ? closeFilterDrawer() : openFilterDrawer())}
           >
             <Animated.View style={{ transform: [{ scale: filterPulse }] }}>
               <Ionicons name="funnel" size={24} color="#666666" />

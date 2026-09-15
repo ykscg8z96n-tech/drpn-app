@@ -24,14 +24,15 @@ export const FilterProvider = ({ children }) => {
     setShowFilterDrawer(false);
   };
 
+  // Neither closes the drawer - picking a category (or the type filter,
+  // which already stayed open) shouldn't kick you out of it; closing is
+  // an explicit action via the funnel button.
   const selectFilter = (categoryId) => {
     setSelectedFilter(categoryId);
-    closeFilterDrawer();
   };
 
   const clearFilter = () => {
     setSelectedFilter(null);
-    closeFilterDrawer();
   };
 
   const selectTypeFilter = (type) => {
