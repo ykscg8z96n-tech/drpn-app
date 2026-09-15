@@ -99,12 +99,14 @@ export default function PrivateChatScreen({ route, navigation }) {
         setMessages(loadedMessages);
 
         // Seed each owner-invite card's accept/decline state from the
-        // server-computed viewerStatus, so a card already responded to
-        // doesn't offer the buttons again after a reload.
+        // server-computed status (accepted/declined/pending, always
+        // relative to whoever was actually invited - not the viewer),
+        // so a card already responded to doesn't offer the buttons again
+        // after a reload.
         const seededStatuses = {};
         loadedMessages.forEach(m => {
-          const status = m.systemMessage?.data?.viewerStatus;
-          if (status) seededStatuses[m._id] = status;
+          const status = m.systemMessage?.data?.status;
+          if (status && status !== 'pending') seededStatuses[m._id] = status;
         });
         if (Object.keys(seededStatuses).length) {
           setInviteStatuses(prev => ({ ...seededStatuses, ...prev }));
@@ -321,7 +323,16 @@ export default function PrivateChatScreen({ route, navigation }) {
   // owner only takes effect once they accept it here.
   const renderOwnerInviteCard = (item) => {
     const data = item.systemMessage?.data || {};
-    const status = inviteStatuses[item._id];
+    // Local optimistic state (right after tapping) takes priority over
+    // the server-computed status from the last load; a freshly-arrived
+    // live invite (over the socket, never enriched by GET) has no
+    // `status` at all, which defaulting to 'pending' handles correctly.
+    const status = inviteStatuses[item._id] || data.status || 'pending';
+    // Computed client-side rather than trusting a server-added
+    // `isRecipient` flag, since a live socket delivery is one shared
+    // message object with no per-viewer fields - invitedUserId is
+    // present on the message itself either way.
+    const isRecipient = data.invitedUserId === user?.id;
 
     return (
       <View style={styles.inviteCardContainer}>
@@ -329,7 +340,10 @@ export default function PrivateChatScreen({ route, navigation }) {
           <View style={styles.inviteCardHeader}>
             <Ionicons name="ribbon" size={18} color="#0078FF" />
             <Text style={styles.inviteCardTitle} numberOfLines={2}>
-              {data.invitedByName ? `${data.invitedByName} invited you to be an owner of` : 'Owner invite for'} "{data.eventName}"
+              {isRecipient
+                ? `${data.invitedByName ? `${data.invitedByName} invited` : 'Invited'} you to be an owner of "${data.eventName}"`
+                : `Invited ${data.invitedUserName || 'them'} to be an owner of "${data.eventName}"`
+              }
             </Text>
           </View>
         </View>
@@ -337,12 +351,21 @@ export default function PrivateChatScreen({ route, navigation }) {
         {status === 'accepted' ? (
           <View style={styles.inviteCardResult}>
             <Ionicons name="checkmark-circle" size={20} color="#00C853" />
-            <Text style={styles.inviteCardResultText}>You're an owner now</Text>
+            <Text style={styles.inviteCardResultText}>
+              {isRecipient ? "You're an owner now" : 'Accepted'}
+            </Text>
           </View>
         ) : status === 'declined' ? (
           <View style={styles.inviteCardResult}>
             <Ionicons name="close-circle" size={20} color="#999999" />
             <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Declined</Text>
+          </View>
+        ) : !isRecipient ? (
+          // The sender can't act on their own invite - just show it's
+          // still awaiting a response.
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="time-outline" size={20} color="#999999" />
+            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Pending</Text>
           </View>
         ) : (
           <View style={styles.inviteCardActions}>

@@ -142,7 +142,10 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
   const uids = [fromUserId.toString(), toUserId.toString()].sort();
   const chatId = `private-${uids[0]}-${uids[1]}`;
   const seq = await ChatCounter.nextSeq(chatId);
-  const inviter = await User.findById(fromUserId).select('name');
+  const [inviter, invitedUser] = await Promise.all([
+    User.findById(fromUserId).select('name'),
+    User.findById(toUserId).select('name')
+  ]);
   const message = await Message.create({
     chatType: 'private',
     chatId,
@@ -156,7 +159,15 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
         eventId: event._id,
         eventName: event.name,
         eventType: event.type,
-        invitedByName: inviter?.name
+        invitedByName: inviter?.name,
+        invitedUserName: invitedUser?.name,
+        // Both sender and recipient see this same card (it's their
+        // shared private chat) - status has to be computed against
+        // who was actually invited, not against whoever's currently
+        // viewing (the sender is themselves already an owner, which
+        // would otherwise make the card look "accepted" to them
+        // regardless of what the recipient does).
+        invitedUserId: toUserId
       }
     },
     seq
@@ -579,11 +590,14 @@ router.put('/:id', [protect,
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
     
-    // Check if user is organizer or admin
-    if (event.organizer.toString() !== req.user.id && !event.admins.includes(req.user.id)) {
+    // Check if user is organizer or owner. Was
+    // `!event.admins.includes(req.user.id)` - comparing an ObjectId to a
+    // string is never true, so an owner (as opposed to the organizer)
+    // could never actually edit the event/group.
+    if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
-    
+
     // CHANGED: Update allowed fields to include category instead of interests
     const allowedUpdates = ['name', 'description', 'category', 'categories', 'eventDate', 'capacity', 'groupSize', 'meetingFrequency', 'ageRange', 'genderPreference', 'location', 'isPublic'];
     const updates = {};
@@ -889,11 +903,11 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
     
-    // Check if user is organizer
-    if (event.organizer.toString() !== req.user.id) {
+    // Check if user is organizer or owner
+    if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
-    
+
     // Soft delete - archive instead of removing
     await Event.findByIdAndUpdate(req.params.id, {
       isActive: false,
@@ -1478,10 +1492,10 @@ router.get('/:id/participants', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
     
-    // Check if user is organizer or participant
-    const isOrganizer = event.organizer.toString() === req.user.id || 
-                       event.admins.includes(req.user.id);
-    
+    // Check if user is organizer or owner. Was `event.admins.includes(req.user.id)`
+    // - comparing an ObjectId to a string is never true.
+    const isOrganizer = event.canUserManage(req.user.id);
+
     let hasAccess = isOrganizer;
     
     if (!isOrganizer) {

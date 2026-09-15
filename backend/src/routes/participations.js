@@ -54,7 +54,26 @@ router.get('/', protect, async (req, res) => {
       .populate('organizer', 'name photos')
       .sort('-createdAt');
 
-    console.log(`✅ Found ${participations.length} participations + ${organizedEvents.length} organized events`);
+    // Events/groups this user was promoted to owner of (but doesn't
+    // organize) - they get the same manage capabilities (edit, archive,
+    // invite) as the organizer, so they need the same 'isMyEvent' signal
+    // on the client. A plain Participation record (from accepting the
+    // roster application) doesn't carry that - owner status lives only
+    // on Event.admins.
+    const ownedEventsQuery = {
+      admins: req.user.id,
+      organizer: { $ne: req.user.id },
+      isArchived: false,
+      isActive: true
+    };
+    if (type === 'event' || type === 'group') {
+      ownedEventsQuery.type = type;
+    }
+    const ownedEvents = await Event.find(ownedEventsQuery)
+      .populate('organizer', 'name photos')
+      .sort('-createdAt');
+
+    console.log(`✅ Found ${participations.length} participations + ${organizedEvents.length} organized events + ${ownedEvents.length} owned events`);
 
     // Filter participations by type if specified
     if (type === 'event' || type === 'group') {
@@ -75,12 +94,29 @@ router.get('/', protect, async (req, res) => {
       }
     }));
 
+    const transformedOwnedEvents = ownedEvents.map(event => ({
+      _id: event._id,
+      event: event,
+      userRole: 'owner',
+      status: 'accepted',
+      isArchived: false,
+      chatParticipation: {
+        hasJoinedChat: true,
+        unreadCount: 0,
+        lastMessageAt: event.updatedAt
+      }
+    }));
+
     // Combine and dedupe by event ID - stale/duplicate Participation
     // records (created before the unique event+participant index was in
     // place) or a participation that happens to point at your own
     // organized event would otherwise render the same event/group
     // multiple times in a row.
-    const combined = [...participations, ...transformedOrganizedEvents];
+    // Organized/owned entries first - the dedupe below keeps whichever
+    // copy of an event it sees first, and a plain Participation record
+    // for an event this user also owns wouldn't carry userRole: 'owner',
+    // losing the "can manage this" signal on the client if it won out.
+    const combined = [...transformedOrganizedEvents, ...transformedOwnedEvents, ...participations];
     const seenEventIds = new Set();
     const allItems = combined.filter(item => {
       const eventId = item.event?._id?.toString();

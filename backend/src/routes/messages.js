@@ -433,15 +433,22 @@ router.get('/private/:connectionId', protect, async (req, res) => {
 
       for (const message of ownerInviteMessages) {
         const invitedEvent = invitedEventsById.get(message.systemMessage.data.eventId?.toString());
-        let viewerStatus = null;
-        if (invitedEvent) {
-          if (invitedEvent.admins.some(id => id.toString() === req.user.id)) {
-            viewerStatus = 'accepted';
-          } else if (invitedEvent.ownerInviteDeclinedBy.some(id => id.toString() === req.user.id)) {
-            viewerStatus = 'declined';
+        const invitedUserId = message.systemMessage.data.invitedUserId?.toString();
+        // Status reflects what the INVITED user did, regardless of who's
+        // looking at the card - the sender is already an owner (that's
+        // how they could send the invite), so checking the viewer's own
+        // admin status would show "accepted" on the sender's copy even
+        // while the recipient still hasn't answered.
+        let status = 'pending';
+        if (invitedEvent && invitedUserId) {
+          if (invitedEvent.admins.some(id => id.toString() === invitedUserId)) {
+            status = 'accepted';
+          } else if (invitedEvent.ownerInviteDeclinedBy.some(id => id.toString() === invitedUserId)) {
+            status = 'declined';
           }
         }
-        message.systemMessage.data.viewerStatus = viewerStatus;
+        message.systemMessage.data.status = status;
+        message.systemMessage.data.isRecipient = invitedUserId === req.user.id;
       }
     }
 
