@@ -306,11 +306,11 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     try {
       Alert.alert(
         'Start Private Chat',
-        `Send a private chat invite to ${userData.name}?`,
+        `Start a private chat with ${userData.name}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Send Invite',
+            text: 'Start',
             onPress: async () => {
               try {
                 const response = await api.post('/private-connections/invite', {
@@ -320,19 +320,19 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 });
 
                 if (response.data.success) {
-                  Alert.alert(
-                    'Invite Sent!',
-                    `Your private chat invite has been sent to ${userData.name}.`
-                  );
+                  navigation.navigate('PrivateChat', {
+                    connectionId: response.data.data._id,
+                    otherUser: { name: userData.name, image: userData.photos?.[0]?.url || userData.photos?.[0] }
+                  });
                 } else {
-                  Alert.alert('Error', response.data.message || 'Failed to send invite');
+                  Alert.alert('Error', response.data.message || 'Failed to start chat');
                 }
               } catch (error) {
-                console.error('Error sending invite:', error);
+                console.error('Error starting chat:', error);
                 if (error.response?.data?.message) {
                   Alert.alert('Error', error.response.data.message);
                 } else {
-                  Alert.alert('Error', 'Failed to send private chat invite');
+                  Alert.alert('Error', 'Failed to start private chat');
                 }
               }
             }
