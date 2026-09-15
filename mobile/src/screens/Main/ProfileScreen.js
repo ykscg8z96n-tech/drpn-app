@@ -733,6 +733,12 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Actions */}
       <View style={styles.actionsSection}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('MyApplications')}>
+          <Ionicons name="document-text-outline" size={24} color="#0078FF" />
+          <Text style={styles.actionText}>My Applications</Text>
+          <Ionicons name="chevron-forward" size={16} color="#666666" />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.actionButton}>
           <Ionicons name="shield-checkmark-outline" size={24} color="#0078FF" />
           <Text style={styles.actionText}>Get Verified</Text>
