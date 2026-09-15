@@ -408,7 +408,10 @@ export default function CreateEventScreen({ navigation }) {
         .filter(item => item.event && !item.event.isArchived)
         .map(item => ({
           ...item.event,
+          // An owner (promoted, not just the organizer) gets the same
+          // manage capabilities - Edit/Archive/Invite on the swipe row.
           isMyEvent: item.userRole === 'organizer'
+            || item.userRole === 'owner'
             || item.event.organizer?._id === user?.id
             || item.event.organizer === user?.id
         }));
