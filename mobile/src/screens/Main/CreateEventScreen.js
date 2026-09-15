@@ -15,6 +15,7 @@ import {
   PanResponder,
   Dimensions,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -443,21 +444,33 @@ export default function CreateEventScreen({ navigation }) {
     try {
       const response = await api.post(`/events/${group._id}/invite`);
       const { inviteCode } = response.data.data;
-      Alert.alert(
-        'Invite Code',
-        `Share this code so people can join "${group.name}":\n\n${inviteCode}`,
-        [
-          {
-            text: 'Copy',
-            onPress: () => {
-              if (Platform.OS === 'web' && navigator.clipboard) {
-                navigator.clipboard.writeText(inviteCode);
-              }
-            }
-          },
-          { text: 'Close', style: 'cancel' }
-        ]
-      );
+      // The link only actually opens to the join screen on web (see App.js
+      // linking config) - still worth including on native as plain text,
+      // since most share targets (Messages, email) will still show it.
+      const joinLink = Platform.OS === 'web'
+        ? `${window.location.origin}/join/${inviteCode}`
+        : `https://drpn.app/join/${inviteCode}`;
+      const message = `Join my group "${group.name}" on DRPN! Code: ${inviteCode}\n${joinLink}`;
+
+      // navigator.share isn't available on most desktop browsers - check
+      // up front rather than relying on Share.share's rejection, since
+      // that same rejection also fires when someone just cancels the
+      // native share sheet and shouldn't be treated as "unsupported".
+      if (Platform.OS === 'web' && !navigator.share) {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(message);
+          Alert.alert('Copied!', 'Invite link copied to your clipboard - paste it wherever you want to share it.');
+        }
+        return;
+      }
+
+      try {
+        await Share.share({ message, url: joinLink, title: `Join ${group.name}` });
+      } catch (shareError) {
+        // Cancelling the share sheet rejects the same way a real failure
+        // would (e.g. AbortError on web) - nothing went wrong, so don't
+        // show an error for it.
+      }
     } catch (error) {
       console.error('Error generating group invite code:', error);
       Alert.alert('Error', 'Failed to generate invite code. Please try again.');

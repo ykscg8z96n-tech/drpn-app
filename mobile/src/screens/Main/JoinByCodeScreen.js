@@ -1,5 +1,5 @@
 // mobile/src/screens/Main/JoinByCodeScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
-export default function JoinByCodeScreen({ navigation }) {
+export default function JoinByCodeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(route.params?.code?.toUpperCase() || '');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+
+  // A shared "…/join/ABC123" link (see App.js linking config) lands here
+  // with the code as a route param - pre-fill it so the person just has
+  // to tap Join instead of retyping what was already in the link.
+  useEffect(() => {
+    if (route.params?.code) {
+      setInviteCode(route.params.code.toUpperCase());
+    }
+  }, [route.params?.code]);
 
   const handleJoinByCode = async () => {
     if (!inviteCode.trim()) {
