@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 import ProfilePreviewCard from '../../components/ProfilePreviewCard';
+import EventCard from '../../components/EventCard';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +38,8 @@ export default function ChatScreen({ route, navigation }) {
   const [eventData, setEventData] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [startingChat, setStartingChat] = useState(false);
+  const [viewingInviteEvent, setViewingInviteEvent] = useState(null);
+  const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'joined' | 'passed' | 'joining'
 
   const flatListRef = useRef(null);
   const finalChatId = chatId || eventId;
@@ -82,6 +85,42 @@ export default function ChatScreen({ route, navigation }) {
     } finally {
       setStartingChat(false);
     }
+  };
+
+  const handleViewInviteEvent = async (eventId) => {
+    try {
+      const response = await api.get(`/events/${eventId}`);
+      if (response.data.success) {
+        setViewingInviteEvent(response.data.data);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load event details');
+    }
+  };
+
+  const handleAcceptInvite = async (message) => {
+    const eventId = message.systemMessage?.data?.eventId;
+    if (!eventId) return;
+    setInviteStatuses(prev => ({ ...prev, [message._id]: 'joining' }));
+    try {
+      const response = await api.post(`/events/${eventId}/quick-join`);
+      if (response.data.success) {
+        setInviteStatuses(prev => ({ ...prev, [message._id]: 'joined' }));
+      } else {
+        throw new Error(response.data.message || 'Failed to join');
+      }
+    } catch (error) {
+      setInviteStatuses(prev => {
+        const next = { ...prev };
+        delete next[message._id];
+        return next;
+      });
+      Alert.alert('Error', error.response?.data?.message || 'Failed to join event');
+    }
+  };
+
+  const handlePassInvite = (message) => {
+    setInviteStatuses(prev => ({ ...prev, [message._id]: 'passed' }));
   };
 
   // Load event data and messages
@@ -213,7 +252,13 @@ export default function ChatScreen({ route, navigation }) {
     const handleNewMessage = (message) => {
       if (message.chatId !== roomChatId) return;
       const senderId = message.sender?._id || message.sender;
-      if (senderId === user?.id) return;
+      // Skip own regular messages - those are already added optimistically
+      // by sendMessage(). A system message (e.g. an event-invite card
+      // posted when this user creates an event for the group) was never
+      // added optimistically, even when they're the "sender", so it must
+      // not be skipped here or the organizer would never see their own
+      // invite card appear live.
+      if (message.messageType !== 'system' && senderId === user?.id) return;
       setMessages(prev => [...prev, message]);
       setTimeout(() => {
         if (flatListRef.current) flatListRef.current.scrollToEnd({ animated: true });
@@ -332,8 +377,81 @@ export default function ChatScreen({ route, navigation }) {
     return eventData?.organizer === userId || eventData?.organizer?._id === userId;
   };
 
+  const formatEventInviteDate = (dateString) => {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+  };
+
+  // Render a group's event-invite card - a distinct bubble from a normal
+  // text message, with its own accept/pass actions instead of the usual
+  // avatar/bubble layout.
+  const renderEventInviteCard = (item) => {
+    const data = item.systemMessage?.data || {};
+    const status = inviteStatuses[item._id];
+    const dateLabel = formatEventInviteDate(data.eventDate);
+
+    return (
+      <View style={styles.inviteCardContainer}>
+        <TouchableOpacity
+          style={styles.inviteCard}
+          activeOpacity={0.85}
+          onPress={() => handleViewInviteEvent(data.eventId)}
+        >
+          <View style={styles.inviteCardHeader}>
+            <Ionicons name="calendar" size={18} color="#0078FF" />
+            <Text style={styles.inviteCardTitle} numberOfLines={1}>{data.eventName}</Text>
+          </View>
+          {dateLabel && <Text style={styles.inviteCardSubtext}>{dateLabel}</Text>}
+          {data.location?.address && (
+            <Text style={styles.inviteCardSubtext} numberOfLines={1}>{data.location.address}</Text>
+          )}
+          <Text style={styles.inviteCardTapHint}>Tap to view details</Text>
+        </TouchableOpacity>
+
+        {status === 'joined' ? (
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="checkmark-circle" size={20} color="#00C853" />
+            <Text style={styles.inviteCardResultText}>You're in!</Text>
+          </View>
+        ) : status === 'passed' ? (
+          <View style={styles.inviteCardResult}>
+            <Ionicons name="close-circle" size={20} color="#999999" />
+            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Passed</Text>
+          </View>
+        ) : (
+          <View style={styles.inviteCardActions}>
+            <TouchableOpacity
+              style={styles.inviteCardPassButton}
+              onPress={() => handlePassInvite(item)}
+              disabled={status === 'joining'}
+            >
+              <Ionicons name="close" size={22} color="#FF3B30" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.inviteCardAcceptButton}
+              onPress={() => handleAcceptInvite(item)}
+              disabled={status === 'joining'}
+            >
+              {status === 'joining' ? (
+                <ActivityIndicator size="small" color="#00C853" />
+              ) : (
+                <Ionicons name="checkmark" size={22} color="#00C853" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   // Render message item (iPhone Messages style)
   const renderMessage = ({ item, index }) => {
+    if (item.messageType === 'system' && item.systemMessage?.type === 'event_invite') {
+      return renderEventInviteCard(item);
+    }
+
     const isOwn = item.sender?._id === user?.id || item.isOwn;
     const isOrganizerMessage = isOrganizer(item.sender?._id);
     const senderName = item.sender?.name || 'Unknown User';
@@ -513,6 +631,21 @@ export default function ChatScreen({ route, navigation }) {
               )}
             </TouchableOpacity>
           )}
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!viewingInviteEvent}
+        animationType="slide"
+        onRequestClose={() => setViewingInviteEvent(null)}
+      >
+        <View style={styles.profileModalContainer}>
+          <TouchableOpacity style={styles.profileCloseButton} onPress={() => setViewingInviteEvent(null)}>
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          <View style={styles.eventCardCenterer}>
+            {viewingInviteEvent && <EventCard event={viewingInviteEvent} />}
+          </View>
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -785,10 +918,83 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Event Invite Card (in group chats)
+  inviteCardContainer: {
+    alignSelf: 'center',
+    width: '85%',
+    marginVertical: 8,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  inviteCard: {
+    padding: 14,
+  },
+  inviteCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  inviteCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  inviteCardSubtext: {
+    color: '#999999',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  inviteCardTapHint: {
+    color: '#0078FF',
+    fontSize: 12,
+    marginTop: 6,
+  },
+  inviteCardActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+  },
+  inviteCardPassButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#333333',
+  },
+  inviteCardAcceptButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  inviteCardResult: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+  },
+  inviteCardResultText: {
+    color: '#00C853',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   // Profile Preview Modal
   profileModalContainer: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  eventCardCenterer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   profileCloseButton: {
     position: 'absolute',
