@@ -19,9 +19,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import WebDateInput from '../../components/WebDateInput';
+import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
 
 const { width, height } = Dimensions.get('window');
+
+// birthDate comes back from the API as a date-only value (either a plain
+// 'YYYY-MM-DD' or an ISO timestamp at UTC midnight). Parsing that with
+// `new Date(string)` interprets it as UTC and then renders it in the
+// viewer's local timezone, which rolls it back a day for anyone west of
+// UTC (e.g. Feb 1 becomes Jan 31 for US timezones). Building the Date from
+// the y/m/d components directly keeps it a local-time midnight instead, so
+// no shift happens no matter the viewer's timezone.
+const parseDateOnly = (dateString) => {
+  if (!dateString) return null;
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Matches the format the browser's native <input type="date"> shows
+// (WebDateInput / e.g. "February 1, 1985"), so the field doesn't visibly
+// change format the moment you save.
+const formatDateOnly = (dateString) => {
+  const date = parseDateOnly(dateString);
+  return date
+    ? date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+};
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
@@ -301,7 +324,7 @@ export default function ProfileScreen({ navigation }) {
   const calculateAge = (birthDate) => {
     if (!birthDate) return null;
     const today = new Date();
-    const birth = new Date(birthDate);
+    const birth = parseDateOnly(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
@@ -560,7 +583,7 @@ export default function ProfileScreen({ navigation }) {
                   <WebDateInput
                     value={tempBirthday}
                     onChange={setTempBirthday}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={toDateOnlyString(new Date())}
                   />
                 ) : (
                   <TextInput
@@ -574,9 +597,7 @@ export default function ProfileScreen({ navigation }) {
                 )
               ) : (
                 <Text style={styles.fieldValue}>
-                  {profile?.birthDate
-                    ? new Date(profile.birthDate).toLocaleDateString()
-                    : 'Add birthday'}
+                  {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
                 </Text>
               )}
             </View>
@@ -589,9 +610,9 @@ export default function ProfileScreen({ navigation }) {
             <DateTimePicker
               value={
                 tempBirthday
-                  ? new Date(tempBirthday)
+                  ? parseDateOnly(tempBirthday)
                   : profile?.birthDate
-                  ? new Date(profile.birthDate)
+                  ? parseDateOnly(profile.birthDate)
                   : new Date()
               }
               mode="date"
@@ -599,7 +620,7 @@ export default function ProfileScreen({ navigation }) {
               onChange={(event, selectedDate) => {
                 setShowDatePicker(false);
                 if (selectedDate) {
-                  const isoDate = selectedDate.toISOString().split('T')[0];
+                  const isoDate = toDateOnlyString(selectedDate);
                   setTempBirthday(isoDate);
                   // Auto-save the birthday
                   updateProfile({ birthDate: isoDate }).then((success) => {
@@ -717,7 +738,7 @@ export default function ProfileScreen({ navigation }) {
   const calculateAge = () => {
     const birthDate = profile?.birthDate || profile?.birthdate;
     if (!birthDate) return null;
-    const birth = new Date(birthDate);
+    const birth = parseDateOnly(birthDate);
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
@@ -1065,6 +1086,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
   },
   fieldLabel: {
@@ -1088,6 +1110,7 @@ const styles = StyleSheet.create({
   },
   editButtonContainer: {
     flexDirection: 'row',
+    flexShrink: 0,
     gap: 8,
   },
   editButton: {

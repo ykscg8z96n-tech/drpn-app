@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import WebDateInput from '../../components/WebDateInput';
+import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -438,13 +438,13 @@ export default function EditEventScreen({ route, navigation }) {
                 <View style={styles.datePickerWrapper}>
                   {Platform.OS === 'web' ? (
                     <WebDateInput
-                      value={formData.eventDate.toISOString().split('T')[0]}
+                      value={toDateOnlyString(formData.eventDate)}
                       onChange={(dateString) => {
                         if (dateString) {
                           setFormData({ ...formData, eventDate: new Date(`${dateString}T00:00:00`) });
                         }
                       }}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={toDateOnlyString(new Date())}
                     />
                   ) : Platform.OS === 'ios' ? (
                     <DateTimePicker

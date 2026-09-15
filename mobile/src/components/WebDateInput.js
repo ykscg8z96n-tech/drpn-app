@@ -12,6 +12,18 @@
 // using <DateTimePicker> directly.
 import React from 'react';
 
+// Converts a Date to a 'YYYY-MM-DD' string using its LOCAL y/m/d, for
+// building this component's value/min/max props from a Date object.
+// `date.toISOString().split('T')[0]` looks equivalent but silently shifts
+// the date by a day for anyone not at UTC+0, because toISOString()
+// converts through UTC first.
+export function toDateOnlyString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // value/onChange both use 'YYYY-MM-DD' strings to match the API's
 // ISO date format, so callers don't need to convert.
 export default function WebDateInput({ value, onChange, min, max, style }) {
@@ -33,7 +45,13 @@ export default function WebDateInput({ value, onChange, min, max, style }) {
         paddingBottom: 12,
         paddingLeft: 16,
         paddingRight: 16,
+        // Without these, the browser's own date-input layout algorithm
+        // ignores its flex parent's available width and refuses to shrink
+        // below its content size, so it overflows past siblings (e.g. the
+        // Cancel/Save buttons) instead of sharing the row with them.
         width: '100%',
+        minWidth: 0,
+        flexShrink: 1,
         boxSizing: 'border-box',
         colorScheme: 'dark',
         ...style,
