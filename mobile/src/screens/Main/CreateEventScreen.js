@@ -344,7 +344,7 @@ export default function CreateEventScreen({ navigation }) {
 
   const becomeOrganizer = async () => {
     try {
-      await api.put('/users/become-organizer');
+      await api.put('/users/profile', { isOrganizer: true });
       Alert.alert('Success', 'You are now an organizer!');
       loadMyEvents();
     } catch (error) {
