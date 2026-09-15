@@ -16,7 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 // Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins
 const CARD_HEIGHT = height - 265;
-const DETAILS_PANEL_HEIGHT = CARD_HEIGHT * 0.62;
 
 // Stock images for each category - same as CreateNewScreen.js
 const STOCK_IMAGES = {
@@ -772,7 +771,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   detailsPanel: {
-    height: DETAILS_PANEL_HEIGHT,
+    // Grows to fit the content (a short description sits low, a long one
+    // pushes higher) instead of always claiming a fixed chunk of the
+    // screen, capping out near full-screen and scrolling internally past
+    // that rather than overflowing.
+    maxHeight: '92%',
     backgroundColor: 'rgba(15, 15, 15, 0.94)',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
