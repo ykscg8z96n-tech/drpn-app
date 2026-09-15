@@ -410,7 +410,8 @@ export default function ChatScreen({ route, navigation }) {
   const renderEventInviteCard = (item) => {
     const data = item.systemMessage?.data || {};
     const status = inviteStatuses[item._id];
-    const dateLabel = formatEventInviteDate(data.eventDate);
+    const isGroupInvite = data.eventType === 'group';
+    const dateLabel = !isGroupInvite && formatEventInviteDate(data.eventDate);
 
     return (
       <View style={styles.inviteCardContainer}>
@@ -420,7 +421,7 @@ export default function ChatScreen({ route, navigation }) {
           onPress={() => handleViewInviteEvent(data.eventId)}
         >
           <View style={styles.inviteCardHeader}>
-            <Ionicons name="calendar" size={18} color="#0078FF" />
+            <Ionicons name={isGroupInvite ? 'people' : 'calendar'} size={18} color="#0078FF" />
             <Text style={styles.inviteCardTitle} numberOfLines={1}>{data.eventName}</Text>
           </View>
           {dateLabel && <Text style={styles.inviteCardSubtext}>{dateLabel}</Text>}

@@ -552,36 +552,39 @@ export default function CreateNewScreen({ route, navigation }) {
             </>
           )}
 
-          {/* Auto-invite existing groups - Only show for EVENTS */}
-          {type === 'event' && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Auto-invite Groups</Text>
-              <Text style={styles.helperText}>
-                Post a clickable invite card into one or more of your groups' chats
+          {/* Auto-invite existing groups - lets one group's members join
+              another (e.g. inviting a poker group into a fantasy football
+              league), or a group's members join an event. */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Auto-invite Groups</Text>
+            <Text style={styles.helperText}>
+              {type === 'event'
+                ? "Post a clickable invite card into one or more of your groups' chats"
+                : "Post a clickable invite card into one or more of your other groups' chats, so their members can join this group"
+              }
+            </Text>
+
+            {myGroups.length === 0 ? (
+              <Text style={styles.disabledText}>
+                Create another group first to use auto-invites
               </Text>
+            ) : (
+              <GroupMultiSelect
+                groups={myGroups}
+                selectedIds={selectedGroupIds}
+                onChange={setSelectedGroupIds}
+              />
+            )}
 
-              {myGroups.length === 0 ? (
-                <Text style={styles.disabledText}>
-                  Create a group first to use auto-invites
+            {selectedGroupIds.length > 0 && (
+              <View style={styles.selectedGroupInfo}>
+                <Ionicons name="checkmark-circle" size={16} color="#00B000" />
+                <Text style={styles.selectedGroupText}>
+                  Group notifications will be added
                 </Text>
-              ) : (
-                <GroupMultiSelect
-                  groups={myGroups}
-                  selectedIds={selectedGroupIds}
-                  onChange={setSelectedGroupIds}
-                />
-              )}
-
-              {selectedGroupIds.length > 0 && (
-                <View style={styles.selectedGroupInfo}>
-                  <Ionicons name="checkmark-circle" size={16} color="#00B000" />
-                  <Text style={styles.selectedGroupText}>
-                    Group notifications will be added
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
+              </View>
+            )}
+          </View>
 
           {/* Privacy/Visibility Options */}
           <View style={styles.inputContainer}>

@@ -63,30 +63,38 @@ async function notifyGroupIfJustFilled(event, req, justBecameFull) {
 
 // Drops a clickable event-invite card into a group's chat so members can
 // see it and join with one tap (POST /:id/quick-join), instead of the
-// organizer-approval path strangers go through. Used both at creation
-// and when a group is added to an existing event via PUT /:id.
+// organizer-approval path strangers go through. Works the same whether
+// `event` is an actual event or another group (e.g. inviting a poker
+// group's members to join a fantasy football league group) - joining a
+// group is just accepting an application with no capacity gate, same as
+// joinsDirectly already treats them in POST /join/:code. Used both at
+// creation and when a group is added to an existing event/group via
+// PUT /:id.
 async function postEventInviteCard(event, group, organizerId, req) {
   const inviteCode = event.generateInviteCode(organizerId);
   await event.save();
 
   const groupChatId = `group-${group._id}`;
   const seq = await ChatCounter.nextSeq(groupChatId);
+  const noun = event.type === 'group' ? 'group' : 'event';
   const chatMessage = await Message.create({
     chatType: 'group',
     chatId: groupChatId,
     event: group._id,
     sender: organizerId,
-    text: `New event "${event.name}" - tap to view and join`,
+    text: `New ${noun} "${event.name}" - tap to view and join`,
     messageType: 'system',
     systemMessage: {
       type: 'event_invite',
       data: {
         eventId: event._id,
         eventName: event.name,
+        eventType: event.type,
         category: event.category,
         eventDate: event.eventDate,
         location: event.location,
         capacity: event.capacity,
+        groupSize: event.groupSize,
         currentAttendees: event.currentAttendees,
         inviteCode
       }
