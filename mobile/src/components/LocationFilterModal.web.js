@@ -110,13 +110,12 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
       zoom: 9,
       zoomControl: true,
     });
-    // CartoDB's "dark matter" tiles (free, no API key - same OSM data,
-    // just a dark basemap) instead of stock OpenStreetMap's bright
-    // green/white tiles, which looked like a browser plugin floating on
-    // top of an otherwise all-dark app.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
+    // Standard OpenStreetMap tiles - a fully dark basemap made place
+    // names and water/land contrast hard to read; normal map colors
+    // inside a dark app chrome (search bar, header, radius panel) reads
+    // fine, same as any map app's light map on a dark surrounding UI.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map);
 
