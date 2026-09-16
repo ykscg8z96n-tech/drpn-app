@@ -250,11 +250,19 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       ),
       headerRight: () => (
-        !isOrganizer(user?.id) && (
-          <TouchableOpacity style={styles.headerLeaveButton} onPress={handleLeave}>
-            <Text style={styles.headerLeaveButtonText}>Leave</Text>
+        <View style={styles.headerRightRow}>
+          <TouchableOpacity
+            style={styles.headerParticipantsButton}
+            onPress={() => eventData && navigation.navigate('PendingApplications', { event: eventData })}
+          >
+            <Ionicons name="people-outline" size={22} color="#0078FF" />
           </TouchableOpacity>
-        )
+          {!isOrganizer(user?.id) && (
+            <TouchableOpacity style={styles.headerLeaveButton} onPress={handleLeave}>
+              <Text style={styles.headerLeaveButtonText}>Leave</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       ),
       headerStyle: {
         backgroundColor: '#000000',
@@ -774,6 +782,14 @@ const styles = StyleSheet.create({
     color: '#999999',
     fontSize: 10,
     fontWeight: '600',
+  },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerParticipantsButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   headerLeaveButton: {
     paddingHorizontal: 12,
