@@ -226,8 +226,8 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                   style={styles.archiveButton}
                   onPress={() => onArchive(item)}
                 >
-                  <Ionicons name="archive-outline" size={24} color="white" />
-                  <Text style={styles.archiveButtonText}>Archive</Text>
+                  <Ionicons name="close-circle-outline" size={24} color="white" />
+                  <Text style={styles.archiveButtonText}>Close</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -497,21 +497,22 @@ export default function CreateEventScreen({ navigation }) {
   };
 
   const handleArchiveEvent = (event) => {
+    const noun = event.type === 'group' ? 'Group' : 'Event';
     Alert.alert(
-      'Archive Event',
-      `Are you sure you want to archive "${event.name}"?`,
+      `Close ${noun}`,
+      `Cancel "${event.name}"? It'll disappear from everyone's feed, and the roster will be notified.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Archive',
+          text: 'Close',
           style: 'destructive',
           onPress: async () => {
             try {
               await api.delete(`/events/${event._id}`);
               setMyEvents(prev => prev.filter(e => e._id !== event._id));
-              Alert.alert('Success', 'Event archived successfully');
+              Alert.alert('Success', `${noun} cancelled successfully`);
             } catch (error) {
-              Alert.alert('Error', 'Failed to archive event');
+              Alert.alert('Error', `Failed to close ${noun.toLowerCase()}`);
             }
           }
         }

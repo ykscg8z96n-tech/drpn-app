@@ -250,14 +250,14 @@ export default function MatchesScreen({ navigation, route }) {
               // 'organizer' or 'owner' (a promoted admin) - see
               // GET /participations, which sets this same field.
               role: item.userRole,
-              // 'Closed' (organizer archived it) or 'Expired' (an
-              // event's date passed on its own) - the chat itself stays
-              // open either way, this is just a status flag on it.
-              lifecycleBadge: event.isArchived
-                ? 'Closed'
-                : (activeTab === 'events' && event.eventDate && new Date(event.eventDate) < new Date())
-                  ? 'Expired'
-                  : null
+              // A cancelled event/group is removed from the feed entirely
+              // (see GET /participations), so anything still showing here
+              // is either active or "completed" - its date passed on its
+              // own without anyone cancelling it. The chat stays open
+              // either way, this is just a status flag on it.
+              lifecycleBadge: (activeTab === 'events' && event.eventDate && new Date(event.eventDate) < new Date())
+                ? 'Completed'
+                : null
             };
           }
         });
