@@ -859,7 +859,7 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={16} color="#666666" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('HowToUse')}>
           <Ionicons name="help-circle-outline" size={24} color="#666666" />
           <Text style={styles.actionText}>Help & Support</Text>
           <Ionicons name="chevron-forward" size={16} color="#666666" />

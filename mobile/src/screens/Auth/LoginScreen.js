@@ -10,9 +10,11 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import api from '../../services/api';
@@ -37,6 +39,10 @@ export default function LoginScreen() {
     }
   };
 
+  const handleSocialLogin = (provider) => {
+    Alert.alert('Coming Soon', `Sign in with ${provider} isn't available yet - use email and password for now.`);
+  };
+
   const handleForgotPassword = async (email) => {
     if (!email) {
       Alert.alert('Forgot Password', 'Enter your email above first, then tap this again.');
@@ -54,10 +60,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue</Text>
@@ -120,6 +127,38 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialLogin('Google')}
+            >
+              <Ionicons name="logo-google" size={20} color="#111111" />
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={[styles.socialButton, styles.appleButton]}
+                onPress={() => handleSocialLogin('Apple')}
+              >
+                <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Continue with Apple</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.socialButton, styles.facebookButton]}
+              onPress={() => handleSocialLogin('Facebook')}
+            >
+              <Ionicons name="logo-facebook" size={20} color="#FFFFFF" />
+              <Text style={[styles.socialButtonText, styles.facebookButtonText]}>Continue with Facebook</Text>
+            </TouchableOpacity>
+
             <View style={styles.signupContainer}>
               <Text style={styles.signupText}>Don't have an account? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
@@ -129,6 +168,7 @@ export default function LoginScreen() {
           </View>
         )}
       </Formik>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -137,6 +177,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#121212', // Grey 900 - Primary dark background
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   header: {
     paddingHorizontal: 20,
@@ -199,6 +243,51 @@ const styles = StyleSheet.create({
     color: '#FFFFFF', // White - Button text
     fontSize: 16,
     fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2C2C2C',
+  },
+  dividerText: {
+    color: '#666666',
+    fontSize: 13,
+    fontWeight: '600',
+    marginHorizontal: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 14,
+    marginBottom: 12,
+    gap: 10,
+  },
+  socialButtonText: {
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+  },
+  facebookButton: {
+    backgroundColor: '#1877F2',
+  },
+  facebookButtonText: {
+    color: '#FFFFFF',
   },
   signupContainer: {
     flexDirection: 'row',
