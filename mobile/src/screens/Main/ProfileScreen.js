@@ -20,28 +20,14 @@ import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
+import DateTimeInput from '../../components/DateTimeInput';
 import AddressAutocompleteInput from '../../components/AddressAutocompleteInput';
+import { toDateOnlyString, parseDateOnly } from '../../utils/dateOnly';
 
 const { width, height } = Dimensions.get('window');
 
-// birthDate comes back from the API as a date-only value (either a plain
-// 'YYYY-MM-DD' or an ISO timestamp at UTC midnight). Parsing that with
-// `new Date(string)` interprets it as UTC and then renders it in the
-// viewer's local timezone, which rolls it back a day for anyone west of
-// UTC (e.g. Feb 1 becomes Jan 31 for US timezones). Building the Date from
-// the y/m/d components directly keeps it a local-time midnight instead, so
-// no shift happens no matter the viewer's timezone.
-const parseDateOnly = (dateString) => {
-  if (!dateString) return null;
-  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
-  return new Date(year, month - 1, day);
-};
-
-// Matches the format the browser's native <input type="date"> shows
-// (WebDateInput / e.g. "February 1, 1985"), so the field doesn't visibly
-// change format the moment you save.
+// Matches the format DateTimeInput's own display uses, so the field
+// doesn't visibly change format the moment you save.
 const formatDateOnly = (dateString) => {
   const date = parseDateOnly(dateString);
   return date
@@ -66,7 +52,6 @@ export default function ProfileScreen({ navigation }) {
   const [tempLocationPlace, setTempLocationPlace] = useState(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [deviceBiasLocation, setDeviceBiasLocation] = useState(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0); // New state for carousel
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -349,9 +334,9 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const startEditingBirthday = () => {
-    // <input type="date"> (used on web) only accepts an exact
-    // 'YYYY-MM-DD' string, but profile.birthDate comes back from the API
-    // as a full ISO timestamp - trim it down.
+    // DateTimeInput's value needs an exact 'YYYY-MM-DD' string, but
+    // profile.birthDate comes back from the API as a full ISO timestamp -
+    // trim it down.
     setTempBirthday(profile?.birthDate ? profile.birthDate.split('T')[0] : '');
     setEditingBirthday(true);
   };
@@ -683,61 +668,21 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="calendar-outline" size={20} color="#666666" />
             <View style={styles.inputContainer}>
               {editingBirthday ? (
-                Platform.OS === 'web' ? (
-                  <WebDateInput
-                    value={tempBirthday}
-                    onChange={setTempBirthday}
-                  />
-                ) : (
-                  <TextInput
-                    style={styles.fieldValue}
-                    value={tempBirthday}
-                    onChangeText={setTempBirthday}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#666666"
-                    autoFocus
-                  />
-                )
+                <DateTimeInput
+                  mode="date"
+                  value={tempBirthday ? parseDateOnly(tempBirthday) : null}
+                  onChange={(date) => setTempBirthday(toDateOnlyString(date))}
+                  maximumDate={new Date()}
+                  placeholder="Select birthday"
+                />
               ) : (
                 <Text style={styles.fieldValue}>
                   {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
                 </Text>
               )}
             </View>
-
-          {/* @react-native-community/datetimepicker has no web implementation
-              (no .web.js entry in the package - it silently does nothing when
-              rendered there), so web falls back to the plain text field above
-              instead of this native picker. */}
-          {Platform.OS !== 'web' && showDatePicker && (
-            <DateTimePicker
-              value={
-                tempBirthday
-                  ? parseDateOnly(tempBirthday)
-                  : profile?.birthDate
-                  ? parseDateOnly(profile.birthDate)
-                  : new Date()
-              }
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) {
-                  const isoDate = toDateOnlyString(selectedDate);
-                  setTempBirthday(isoDate);
-                  // Auto-save the birthday
-                  updateProfile({ birthDate: isoDate }).then((success) => {
-                    if (success) {
-                      Alert.alert('Success', 'Birthday updated!');
-                    }
-                  });
-                }
-              }}
-            />
-          )}
-        </View>
-
-         <View style={styles.editButtonContainer}>
+          </View>
+          <View style={styles.editButtonContainer}>
             {editingBirthday ? (
               <>
                 <TouchableOpacity style={styles.editButton} onPress={cancelBirthdayEdit}>
@@ -748,10 +693,7 @@ export default function ProfileScreen({ navigation }) {
                 </TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
-              >
+              <TouchableOpacity style={styles.editButton} onPress={startEditingBirthday}>
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}

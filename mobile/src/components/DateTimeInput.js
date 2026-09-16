@@ -1,10 +1,11 @@
 // mobile/src/components/DateTimeInput.js
 //
 // One component, one API (`value`/`onChange`, both plain JS Dates), for
-// picking a date AND time - used anywhere the app needs an actual
-// moment in time (event date), not just a day (see WebDateInput for
-// date-only fields like a birthday). Each platform gets what's actually
-// the "proper" picker for it instead of one compromise UI everywhere:
+// picking a date, or a date AND time - used anywhere the app needs an
+// actual moment in time (event date) via the default mode="datetime",
+// or just a day (a birthday) via mode="date". Each platform gets
+// what's actually the "proper" picker for it instead of one compromise
+// UI everywhere:
 //
 // - iOS: the real system picker (calendar grid + time wheel combined,
 //   via `display="inline"` + `mode="datetime"`), in a bottom sheet.
@@ -46,13 +47,15 @@ function startOfDay(d) {
   return copy;
 }
 
-function formatDateTime(date) {
-  return date.toLocaleDateString('en-US', {
+function formatDateTime(date, mode) {
+  const dateText = date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric'
-  }) + ' at ' + date.toLocaleTimeString('en-US', {
+  });
+  if (mode === 'date') return dateText;
+  return dateText + ' at ' + date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit'
   });
@@ -60,13 +63,14 @@ function formatDateTime(date) {
 
 // A plain month grid - Sun-Sat header row, then day cells (blank cells
 // for the days before the 1st, so the 1st lands under its real weekday).
-function CalendarGrid({ visibleMonth, selectedDate, minimumDate, onSelectDay }) {
+function CalendarGrid({ visibleMonth, selectedDate, minimumDate, maximumDate, onSelectDay }) {
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth();
   const firstOfMonth = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const leadingBlanks = firstOfMonth.getDay();
   const minDay = minimumDate ? startOfDay(minimumDate) : null;
+  const maxDay = maximumDate ? startOfDay(maximumDate) : null;
 
   const cells = [];
   for (let i = 0; i < leadingBlanks; i++) {
@@ -75,17 +79,17 @@ function CalendarGrid({ visibleMonth, selectedDate, minimumDate, onSelectDay }) 
   for (let day = 1; day <= daysInMonth; day++) {
     const cellDate = new Date(year, month, day);
     const isSelected = selectedDate && isSameDay(cellDate, selectedDate);
-    const isPast = minDay && cellDate < minDay;
+    const isOutOfRange = (minDay && cellDate < minDay) || (maxDay && cellDate > maxDay);
     cells.push(
       <TouchableOpacity
         key={day}
         style={[styles.dayCell, isSelected && styles.dayCellSelected]}
-        disabled={isPast}
+        disabled={isOutOfRange}
         onPress={() => onSelectDay(cellDate)}
       >
         <Text style={[
           styles.dayCellText,
-          isPast && styles.dayCellTextDisabled,
+          isOutOfRange && styles.dayCellTextDisabled,
           isSelected && styles.dayCellTextSelected
         ]}>
           {day}
@@ -182,7 +186,7 @@ function from24Hour(hour24) {
 // The web calendar+time modal - visibleMonth/draftDate/draftTime are all
 // local until "Done" is tapped, so backing out with the X or a tap
 // outside never partially applies a change.
-function WebPicker({ value, minimumDate, onConfirm, onClose }) {
+function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }) {
   const initial = value || new Date();
   const [visibleMonth, setVisibleMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(startOfDay(initial));
@@ -199,7 +203,11 @@ function WebPicker({ value, minimumDate, onConfirm, onClose }) {
 
   const handleDone = () => {
     const result = new Date(selectedDate);
-    result.setHours(to24Hour(time.hour12, time.isPM), time.minute, 0, 0);
+    if (mode === 'date') {
+      result.setHours(0, 0, 0, 0);
+    } else {
+      result.setHours(to24Hour(time.hour12, time.isPM), time.minute, 0, 0);
+    }
     onConfirm(result);
   };
 
@@ -223,18 +231,22 @@ function WebPicker({ value, minimumDate, onConfirm, onClose }) {
             visibleMonth={visibleMonth}
             selectedDate={selectedDate}
             minimumDate={minimumDate}
+            maximumDate={maximumDate}
             onSelectDay={setSelectedDate}
           />
 
-          <View style={styles.divider} />
-
-          <Text style={styles.timeLabel}>Time</Text>
-          <TimeStepper
-            hour12={time.hour12}
-            minute={time.minute}
-            isPM={time.isPM}
-            onChange={setTime}
-          />
+          {mode !== 'date' && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.timeLabel}>Time</Text>
+              <TimeStepper
+                hour12={time.hour12}
+                minute={time.minute}
+                isPM={time.isPM}
+                onChange={setTime}
+              />
+            </>
+          )}
 
           <View style={styles.sheetActions}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -253,7 +265,7 @@ function WebPicker({ value, minimumDate, onConfirm, onClose }) {
 // iOS's native picker already gives a real calendar grid + time wheel in
 // one control when display="inline" and mode="datetime" - just needs a
 // sheet around it with the same Cancel/Done pattern as the web version.
-function IOSPicker({ value, minimumDate, onConfirm, onClose }) {
+function IOSPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }) {
   const [draft, setDraft] = useState(value || new Date());
 
   return (
@@ -262,10 +274,11 @@ function IOSPicker({ value, minimumDate, onConfirm, onClose }) {
         <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <RNDateTimePicker
             value={draft}
-            mode="datetime"
+            mode={mode === 'date' ? 'date' : 'datetime'}
             display="inline"
             themeVariant="dark"
             minimumDate={minimumDate}
+            maximumDate={maximumDate}
             onChange={(event, selectedDate) => {
               if (selectedDate && event.type !== 'dismissed') {
                 setDraft(selectedDate);
@@ -286,11 +299,14 @@ function IOSPicker({ value, minimumDate, onConfirm, onClose }) {
   );
 }
 
-export default function DateTimeInput({ value, onChange, minimumDate }) {
+// mode: 'datetime' (default - date + time, e.g. an event) or 'date'
+// (day only, e.g. a birthday - no time stepper/wheel, no time in the
+// display text).
+export default function DateTimeInput({ value, onChange, minimumDate, maximumDate, mode = 'datetime', placeholder }) {
   const [showWebOrIOSPicker, setShowWebOrIOSPicker] = useState(false);
   // Android has no combined datetime mode - this tracks which native
   // dialog is currently up, chaining date -> time the way Android's own
-  // apps do it.
+  // apps do it. Date-only mode skips the time step entirely.
   const [androidStep, setAndroidStep] = useState(null); // null | 'date' | 'time'
   const [androidDraftDate, setAndroidDraftDate] = useState(null);
 
@@ -308,7 +324,7 @@ export default function DateTimeInput({ value, onChange, minimumDate }) {
       <TouchableOpacity style={styles.fieldButton} onPress={openPicker}>
         <Ionicons name="calendar" size={20} color="#0078FF" />
         <Text style={styles.fieldButtonText}>
-          {value ? formatDateTime(value) : 'Select date and time'}
+          {value ? formatDateTime(value, mode) : (placeholder || (mode === 'date' ? 'Select date' : 'Select date and time'))}
         </Text>
         <Ionicons name="chevron-down" size={18} color="#999999" />
       </TouchableOpacity>
@@ -317,6 +333,8 @@ export default function DateTimeInput({ value, onChange, minimumDate }) {
         <WebPicker
           value={value}
           minimumDate={minimumDate}
+          maximumDate={maximumDate}
+          mode={mode}
           onConfirm={(result) => { onChange(result); setShowWebOrIOSPicker(false); }}
           onClose={() => setShowWebOrIOSPicker(false)}
         />
@@ -326,6 +344,8 @@ export default function DateTimeInput({ value, onChange, minimumDate }) {
         <IOSPicker
           value={value}
           minimumDate={minimumDate}
+          maximumDate={maximumDate}
+          mode={mode}
           onConfirm={(result) => { onChange(result); setShowWebOrIOSPicker(false); }}
           onClose={() => setShowWebOrIOSPicker(false)}
         />
@@ -337,9 +357,15 @@ export default function DateTimeInput({ value, onChange, minimumDate }) {
           mode="date"
           display="calendar"
           minimumDate={minimumDate}
+          maximumDate={maximumDate}
           onChange={(event, selectedDate) => {
             if (event.type === 'dismissed') {
               setAndroidStep(null);
+              return;
+            }
+            if (mode === 'date') {
+              setAndroidStep(null);
+              onChange(selectedDate);
               return;
             }
             setAndroidDraftDate(selectedDate);
@@ -348,7 +374,7 @@ export default function DateTimeInput({ value, onChange, minimumDate }) {
         />
       )}
 
-      {Platform.OS === 'android' && androidStep === 'time' && (
+      {Platform.OS === 'android' && mode !== 'date' && androidStep === 'time' && (
         <RNDateTimePicker
           value={androidDraftDate}
           mode="time"
