@@ -558,6 +558,7 @@ export default function ChatScreen({ route, navigation }) {
             placeholder="Message"
             placeholderTextColor="#999999"
             multiline
+            rows={1}
             maxLength={1000}
           />
         </View>
