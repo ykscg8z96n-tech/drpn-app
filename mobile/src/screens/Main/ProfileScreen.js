@@ -751,34 +751,15 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Location Field */}
-        <View style={styles.editableInfoItem}>
-          <View style={styles.infoRow}>
+        {/* Location Field - same header-then-full-width-content layout as
+            About, so the search box/results sit on their own line below
+            the label instead of squeezed into the row next to Cancel/Save. */}
+        <View style={styles.aboutSection}>
+          <View style={styles.aboutHeader}>
             <Ionicons name="location-outline" size={20} color="#666666" />
-            <View style={styles.inputContainer}>
-              {editingLocation ? (
-                <AddressAutocompleteInput
-                  value={tempLocationText}
-                  placeholder="Search a city or address"
-                  onChangeText={setTempLocationText}
-                  onSelectPlace={(place) => {
-                    setTempLocationText(place.address);
-                    setTempLocationPlace(place);
-                  }}
-                  showIcon={false}
-                  biasLocation={deviceBiasLocation || (profile?.location?.coordinates ? {
-                    latitude: profile.location.coordinates[1],
-                    longitude: profile.location.coordinates[0],
-                  } : null)}
-                />
-              ) : (
-                <Text style={styles.fieldValue}>{profile?.location?.address || 'Add location'}</Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.editButtonContainer}>
+            <Text style={styles.infoLabel}>Location</Text>
             {editingLocation ? (
-              <>
+              <View style={styles.editButtonContainer}>
                 <TouchableOpacity style={styles.editButton} onPress={cancelLocationEdit}>
                   <Text style={styles.editButtonText}>Cancel</Text>
                 </TouchableOpacity>
@@ -789,13 +770,35 @@ export default function ProfileScreen({ navigation }) {
                     <Text style={styles.saveButtonText}>Save</Text>
                   )}
                 </TouchableOpacity>
-              </>
+              </View>
             ) : (
               <TouchableOpacity style={styles.editButton} onPress={startEditingLocation}>
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
+          {editingLocation ? (
+            <View style={styles.locationSearchWrapper}>
+              <AddressAutocompleteInput
+                value={tempLocationText}
+                placeholder="Search a city or address"
+                onChangeText={setTempLocationText}
+                onSelectPlace={(place) => {
+                  setTempLocationText(place.address);
+                  setTempLocationPlace(place);
+                }}
+                showIcon={false}
+                biasLocation={deviceBiasLocation || (profile?.location?.coordinates ? {
+                  latitude: profile.location.coordinates[1],
+                  longitude: profile.location.coordinates[0],
+                } : null)}
+              />
+            </View>
+          ) : (
+            <Text style={[styles.fieldValue, styles.locationValue]}>
+              {profile?.location?.address || 'Add location'}
+            </Text>
+          )}
         </View>
 
         {/* About - Multi-line input */}
@@ -1063,7 +1066,7 @@ export default function ProfileScreen({ navigation }) {
           
           {/* About Section */}
           {profile?.bio && (
-            <View style={styles.aboutSection}>
+            <View style={styles.previewAboutSection}>
               <Text style={styles.aboutTitle}>About</Text>
               <Text style={styles.previewBio}>
                 {profile.bio}
@@ -1418,6 +1421,12 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     color: '#999999',
   },
+  locationSearchWrapper: {
+    marginLeft: 32, // Align with the About box below it
+  },
+  locationValue: {
+    marginLeft: 32,
+  },
 
   // Actions Section
   actionsSection: {
@@ -1694,7 +1703,7 @@ const styles = StyleSheet.create({
     color: '#C7C4C4',
     marginBottom: 12,
   },
-  aboutSection: {
+  previewAboutSection: {
     marginBottom: 20,
   },
   aboutTitle: {
