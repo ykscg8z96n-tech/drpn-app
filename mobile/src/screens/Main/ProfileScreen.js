@@ -389,12 +389,19 @@ export default function ProfileScreen({ navigation }) {
     // location for the FIRST time, when there's nothing saved yet to bias
     // against at all.
     if (!deviceBiasLocation) {
-      Location.getCurrentPositionAsync({}).then((location) => {
-        setDeviceBiasLocation({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-      }).catch(() => {});
+      Location.requestForegroundPermissionsAsync()
+        .then(({ status }) => {
+          if (status !== 'granted') return null;
+          return Location.getCurrentPositionAsync({});
+        })
+        .then((location) => {
+          if (!location) return;
+          setDeviceBiasLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+        })
+        .catch(() => {});
     }
   };
 
