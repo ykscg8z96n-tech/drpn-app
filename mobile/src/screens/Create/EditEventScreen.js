@@ -1,5 +1,6 @@
 // mobile/src/screens/Create/EditEventScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -131,8 +132,16 @@ export default function EditEventScreen({ route, navigation }) {
 
   useEffect(() => {
     getCurrentLocationCoordinates();
-    loadMyGroups();
   }, []);
+
+  // Same staleness risk as CreateNewScreen's loadMyGroups - this screen
+  // can stay mounted between visits, so refetch on every focus rather
+  // than just once on mount.
+  useFocusEffect(
+    useCallback(() => {
+      loadMyGroups();
+    }, [])
+  );
 
   const loadMyGroups = async () => {
     try {

@@ -8,6 +8,7 @@ const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
 const { sendPasswordResetEmail } = require('../utils/email');
+const { sendWelcomeMessage } = require('../services/botNotice');
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -61,6 +62,12 @@ router.post('/register', authLimiter, [
 
     const user = await User.create(userData);
     const token = generateToken(user._id);
+
+    try {
+      await sendWelcomeMessage(user._id, req);
+    } catch (welcomeError) {
+      console.error('⚠️ Failed to send welcome message:', welcomeError);
+    }
 
     res.status(201).json({
       success: true,

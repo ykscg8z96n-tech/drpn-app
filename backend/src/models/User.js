@@ -302,8 +302,19 @@ userSchema.methods.getRecentSwipes = function(days = 30) {
 
 // Method to check if user has swiped on an event
 userSchema.methods.hasSwipedOnEvent = function(eventId) {
-  return this.swipes.some(swipe => 
+  return this.swipes.some(swipe =>
     swipe.targetId && swipe.targetId.toString() === eventId.toString()
+  );
+};
+
+// A 'pass' swipe is also how leaving or getting kicked from an event/group
+// is recorded (see routes/events.js's leave and kick routes) - it's the
+// one signal that already exists for "don't show this to me/let me back
+// in again", so the group-invite quick-join and invite-code join routes
+// check this too, not just the swipe feed's own exclusion query.
+userSchema.methods.hasPassedEvent = function(eventId) {
+  return this.swipes.some(swipe =>
+    swipe.targetId && swipe.targetId.toString() === eventId.toString() && swipe.action === 'pass'
   );
 };
 
