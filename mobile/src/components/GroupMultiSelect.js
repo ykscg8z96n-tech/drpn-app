@@ -4,6 +4,11 @@
 // auto-invite" - a plain checklist got unwieldy once someone belongs to
 // more than a handful of groups, so this narrows the list as you type
 // and shows what's already picked as removable chips.
+//
+// Selection uses the same filled/outlined pill toggle as the Filter
+// drawer's category chips, instead of a checkbox-per-row list, so
+// "picking multiple things" looks and feels the same everywhere in the
+// app rather than checkboxes in one place and pills in another.
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +37,7 @@ export default function GroupMultiSelect({ groups, selectedIds, onChange }) {
           {selectedGroups.map(group => (
             <TouchableOpacity key={group._id} style={styles.chip} onPress={() => toggleGroup(group._id)}>
               <Text style={styles.chipText} numberOfLines={1}>{group.name}</Text>
-              <Ionicons name="close" size={14} color="#0078FF" />
+              <Ionicons name="close" size={14} color="#FFFFFF" />
             </TouchableOpacity>
           ))}
         </View>
@@ -54,7 +59,7 @@ export default function GroupMultiSelect({ groups, selectedIds, onChange }) {
         )}
       </View>
 
-      <View style={styles.list}>
+      <View style={styles.pillGrid}>
         {filteredGroups.length === 0 ? (
           <Text style={styles.emptyText}>No groups match "{query}"</Text>
         ) : (
@@ -63,15 +68,12 @@ export default function GroupMultiSelect({ groups, selectedIds, onChange }) {
             return (
               <TouchableOpacity
                 key={group._id}
-                style={styles.row}
+                style={[styles.pill, selected && styles.pillActive]}
                 onPress={() => toggleGroup(group._id)}
               >
-                <Ionicons
-                  name={selected ? 'checkbox' : 'square-outline'}
-                  size={22}
-                  color={selected ? '#0078FF' : '#666666'}
-                />
-                <Text style={styles.rowText}>{group.name}</Text>
+                <Text style={[styles.pillText, selected && styles.pillTextActive]} numberOfLines={1}>
+                  {group.name}
+                </Text>
               </TouchableOpacity>
             );
           })
@@ -92,16 +94,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 120, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: '#0078FF',
+    backgroundColor: '#0078FF',
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     maxWidth: 180,
   },
   chipText: {
-    color: '#0078FF',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
     flexShrink: 1,
@@ -121,19 +121,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#FFFFFF',
+    outlineStyle: 'none',
   },
-  list: {
-    marginTop: 8,
-  },
-  row: {
+  pillGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
   },
-  rowText: {
-    fontSize: 15,
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333333',
+    maxWidth: 200,
+  },
+  pillActive: {
+    backgroundColor: '#0078FF',
+    borderColor: '#0078FF',
+  },
+  pillText: {
+    fontSize: 14,
     color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  pillTextActive: {
+    fontWeight: '700',
   },
   emptyText: {
     color: '#666666',
