@@ -11,6 +11,7 @@ import SwipeScreen from '../screens/Main/SwipeScreen';
 import MatchesScreen from '../screens/Main/MatchesScreen';
 import CreateEventScreen from '../screens/Main/CreateEventScreen';
 import ProfileScreen from '../screens/Main/ProfileScreen';
+import HowToUseScreen from '../screens/Main/HowToUseScreen';
 
 // Stack Screens
 import ChatScreen from '../screens/Chat/ChatScreen';
@@ -214,6 +215,11 @@ function ProfileStack() {
         name="ProfileMain"
         component={ProfileScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="HowToUse"
+        component={HowToUseScreen}
+        options={{ title: 'How to Use DRPN' }}
       />
     </Stack.Navigator>
   );
