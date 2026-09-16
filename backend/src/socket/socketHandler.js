@@ -4,7 +4,8 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const ChatCounter = require('../models/ChatCounter');
 const Participation = require('../models/Participation');
-const { hasChatAccess, checkEventAccess, checkPrivateAccess } = require('./chatAccess');
+const { hasChatAccess, checkEventAccess, getPrivateConnection } = require('./chatAccess');
+const { sendPushToUser } = require('../services/webPush');
 
 // userId -> { socketId, user, connectedAt }. Fine for a single instance;
 // scaling to a second instance needs this behind the Socket.IO Redis
@@ -116,7 +117,7 @@ const handleConnection = (io) => {
           });
           if (participation) await participation.updateLastMessage();
         } else if (chatType === 'private') {
-          const connection = await checkPrivateAccess(chatId, socket.userId);
+          const connection = await getPrivateConnection(chatId, socket.userId);
           if (!connection) {
             socket.emit('message:error', { clientId, reason: 'Not authorized for this chat' });
             return;
@@ -149,6 +150,39 @@ const handleConnection = (io) => {
           createdAt: message.createdAt
         });
         io.to(chatRoom(chatType, chatId)).emit('message:new', message);
+
+        // Push notify anyone who isn't actively connected to receive this
+        // over the socket - that's the entire point of push (reaching
+        // someone whose app is backgrounded/closed), not a broadcast to
+        // everyone regardless of whether they're already looking at it.
+        const senderName = message.sender?.name || 'Someone';
+        const preview = text.trim().length > 120 ? `${text.trim().slice(0, 117)}...` : text.trim();
+        if (chatType === 'event' || chatType === 'group') {
+          const participants = await Participation.getEventParticipants(message.event);
+          const recipientIds = participants
+            .map(p => (p.participant?._id || p.participant)?.toString())
+            .filter(id => id && id !== socket.userId && !isUserOnline(id));
+          recipientIds.forEach(id => {
+            sendPushToUser(id, {
+              title: `${senderName} in ${message.chatId.split('-')[0] === 'group' ? 'your group' : 'your event'}`,
+              body: preview,
+              url: '/'
+            }).catch(err => console.error('⚠️ Push notify (event) failed:', err));
+          });
+        } else if (chatType === 'private') {
+          const connection = await getPrivateConnection(chatId, socket.userId);
+          if (connection) {
+            const recipientId = [connection.participant?.toString(), connection.otherUser?.toString()]
+              .find(id => id && id !== socket.userId);
+            if (recipientId && !isUserOnline(recipientId)) {
+              sendPushToUser(recipientId, {
+                title: senderName,
+                body: preview,
+                url: '/'
+              }).catch(err => console.error('⚠️ Push notify (private) failed:', err));
+            }
+          }
+        }
       } catch (error) {
         // A concurrent retry with the same clientId can race past the
         // existence check above; the unique index catches it here.

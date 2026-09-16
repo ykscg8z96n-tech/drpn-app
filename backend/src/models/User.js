@@ -83,6 +83,18 @@ const userSchema = new mongoose.Schema({
     platform: { type: String, enum: ['ios', 'android', 'web'] },
     updatedAt: { type: Date, default: Date.now }
   }],
+  // Web Push subscriptions (browser/PWA push, via the Push API) - a
+  // different shape than pushTokens above (which was sized for Expo's
+  // native push tokens, unused so far since testing has been entirely
+  // through the web app rather than an installed native build).
+  webPushSubscriptions: [{
+    endpoint: { type: String, required: true },
+    keys: {
+      p256dh: { type: String, required: true },
+      auth: { type: String, required: true }
+    },
+    createdAt: { type: Date, default: Date.now }
+  }],
   isPremium: {
     type: Boolean,
     default: false

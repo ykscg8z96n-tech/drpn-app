@@ -100,6 +100,7 @@ app.use('/api/private-connections', require('./routes/private-connections'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/geocode', require('./routes/geocode'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Health check endpoint
