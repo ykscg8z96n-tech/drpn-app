@@ -10,7 +10,7 @@ const ChatCounter = require('../models/ChatCounter');
 const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const { getBotUserId } = require('../services/botUser');
-const { getOrCreatePrivateConnection, postPrivateNotification, pushIfOffline, sendBotNotice } = require('../services/botNotice');
+const { getOrCreatePrivateConnection, postPrivateNotification, pushIfOffline, sendBotNotice, postSystemAnnouncement } = require('../services/botNotice');
 const { cancelEventForRoster } = require('../services/eventLifecycle');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -116,21 +116,6 @@ async function postEventInviteCard(event, group, organizerId, req) {
 // sendBotNotice moved to services/botNotice.js so routes/auth.js can also
 // send the welcome message at signup.
 
-// A plain-text bot announcement into an event/group's own chat - "X
-// joined", "X is now an owner", "X stepped down", "X was removed".
-// Non-fatal by design (callers wrap this in try/catch): the roster
-// change itself already succeeded by the time this runs, so a failure
-// posting the announcement shouldn't undo or fail that.
-async function postSystemAnnouncement(event, text, req) {
-  const botId = await getBotUserId();
-  const message = await Message.createEventMessage(event._id, botId, text, event.type);
-  await message.populate('sender', 'name photos');
-  const io = req.app.get('io');
-  if (io) {
-    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
-  }
-}
-
 // Promoting someone to owner has to be something they opt into (so an
 // organizer can't just hand you responsibility you didn't want) - sent
 // as a card in a private message the same way an event/group invite is
@@ -180,53 +165,6 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
   await pushIfOffline(toUserId, {
     title: inviter?.name || 'DRPN',
     body: `Invited you to be an owner of "${event.name}"`,
-    url: '/'
-  });
-}
-
-// Transferring the organizer role has to be opted into by the recipient,
-// same reasoning and same card-in-a-private-chat mechanism as
-// postOwnerInviteCard - the difference is what accepting it does
-// (replaces event.organizer entirely, rather than adding to admins).
-async function postTransferOwnershipCard(event, fromUserId, toUserId, req) {
-  const connection = await getOrCreatePrivateConnection(fromUserId, toUserId, event._id);
-
-  const uids = [fromUserId.toString(), toUserId.toString()].sort();
-  const chatId = `private-${uids[0]}-${uids[1]}`;
-  const seq = await ChatCounter.nextSeq(chatId);
-  const [fromUser, toUser] = await Promise.all([
-    User.findById(fromUserId).select('name'),
-    User.findById(toUserId).select('name')
-  ]);
-  const message = await Message.create({
-    chatType: 'private',
-    chatId,
-    privateConnection: connection._id,
-    sender: fromUserId,
-    text: `${fromUser?.name || 'Someone'} wants to transfer ownership of "${event.name}" to you`,
-    messageType: 'system',
-    systemMessage: {
-      type: 'transfer_ownership',
-      data: {
-        eventId: event._id,
-        eventName: event.name,
-        eventType: event.type,
-        fromUserName: fromUser?.name,
-        toUserName: toUser?.name,
-        invitedUserId: toUserId
-      }
-    },
-    seq
-  });
-  await message.populate('sender', 'name photos');
-
-  const io = req.app.get('io');
-  if (io) {
-    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
-  }
-  await pushIfOffline(toUserId, {
-    title: fromUser?.name || 'DRPN',
-    body: `Wants to transfer ownership of "${event.name}" to you`,
     url: '/'
   });
 }
@@ -1052,7 +990,7 @@ router.post('/:id/quick-join', protect, async (req, res) => {
 
     const groups = await Event.find({ _id: { $in: event.inviteGroupIds } });
     const isGroupMember = groups.some(group =>
-      group.organizer.toString() === req.user.id
+      group.canUserManage(req.user.id)
       || group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
     );
     if (!isGroupMember) {
@@ -1154,7 +1092,7 @@ router.post('/:id/invite-owner', protect, async (req, res) => {
     if (userId === req.user.id) {
       return res.status(400).json({ success: false, message: "You can't invite yourself" });
     }
-    if (event.organizer.toString() === userId || event.admins.some(id => id.toString() === userId)) {
+    if (event.canUserManage(userId)) {
       return res.status(400).json({ success: false, message: 'Already an owner' });
     }
     const isMember = event.applicants.some(a => a.userId.toString() === userId && a.status === 'accepted');
@@ -1234,136 +1172,17 @@ router.post('/:id/decline-owner-invite', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/events/:id/transfer-ownership
-// @desc    Organizer sends a transfer-ownership card to another roster
-//          member. Only takes effect once they accept it.
-// @access  Private
-router.post('/:id/transfer-ownership', protect, async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'userId is required' });
-    }
-
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-    if (event.organizer.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'Only the organizer can transfer ownership' });
-    }
-    if (userId === req.user.id) {
-      return res.status(400).json({ success: false, message: "You can't transfer ownership to yourself" });
-    }
-    const isMember = event.applicants.some(a => a.userId.toString() === userId && a.status === 'accepted');
-    if (!isMember) {
-      return res.status(400).json({ success: false, message: 'Only current roster members can be made organizer' });
-    }
-
-    await postTransferOwnershipCard(event, req.user.id, userId, req);
-
-    res.json({ success: true, message: 'Transfer request sent' });
-  } catch (error) {
-    console.error('Error in transfer-ownership:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// @route   POST /api/events/:id/accept-transfer-ownership
-// @desc    Accept a transfer-ownership card - replaces event.organizer
-//          with the accepting user and folds the previous organizer into
-//          admins so they don't lose all access.
-// @access  Private
-router.post('/:id/accept-transfer-ownership', protect, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-
-    const previousOrganizer = event.organizer;
-    event.organizer = req.user.id;
-    // Fold the outgoing organizer into admins (unless they somehow already
-    // are one), and drop the new organizer from admins if they were
-    // already listed there - they're the organizer now, not just an admin.
-    event.admins = event.admins.filter(id => id.toString() !== req.user.id);
-    if (!event.admins.some(id => id.toString() === previousOrganizer.toString())) {
-      event.admins.push(previousOrganizer);
-    }
-    // The organizer was never a roster member (organizers don't apply to
-    // their own event) - admins alone doesn't grant chat/roster access,
-    // that's gated on being the organizer OR having an accepted
-    // Participation record. Without this, stepping down from organizer
-    // to admin left them with no trace in either place: not shown on the
-    // roster, "Not authorized" opening the event/group chat.
-    if (!event.applicants.some(a => a.userId.toString() === previousOrganizer.toString())) {
-      event.applicants.push({
-        userId: previousOrganizer,
-        status: 'accepted',
-        appliedAt: new Date(),
-        respondedAt: new Date()
-      });
-    }
-    await event.save();
-
-    const existingParticipation = await Participation.findOne({
-      event: event._id,
-      participant: previousOrganizer
-    });
-    if (!existingParticipation) {
-      await Participation.create({
-        event: event._id,
-        participant: previousOrganizer,
-        status: 'accepted',
-        joinMethod: 'ownership_transfer',
-        acceptedBy: req.user.id,
-        acceptedAt: new Date(),
-        isArchived: false
-      });
-    } else if (existingParticipation.isArchived) {
-      existingParticipation.isArchived = false;
-      existingParticipation.status = 'accepted';
-      await existingParticipation.save();
-    }
-
-    if (req.body.messageId) {
-      await Message.updateOne(
-        { _id: req.body.messageId },
-        { $set: { 'systemMessage.data.responseStatus': 'accepted' } }
-      );
-    }
-    try {
-      await postSystemAnnouncement(event, `${req.user.name || 'Someone'} is now the organizer of "${event.name}"`, req);
-    } catch (announceError) {
-      console.error('⚠️ Failed to post transfer-accepted announcement:', announceError);
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error in accept-transfer-ownership:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// @route   POST /api/events/:id/decline-transfer-ownership
-// @desc    Dismiss a transfer-ownership card - organizer stays unchanged.
-// @access  Private
-router.post('/:id/decline-transfer-ownership', protect, async (req, res) => {
-  try {
-    if (req.body.messageId) {
-      await Message.updateOne(
-        { _id: req.body.messageId },
-        { $set: { 'systemMessage.data.responseStatus': 'declined' } }
-      );
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error in decline-transfer-ownership:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
 // @route   POST /api/events/:id/step-down
-// @desc    An owner (not the organizer) voluntarily gives up ownership.
+// @desc    Any owner can give up ownership and become a plain roster
+//          member instead of being removed entirely (they usually weren't
+//          on the roster at all otherwise - an owner never had to apply
+//          to their own event/group - so this adds them as an accepted
+//          member if they aren't one already). Every owner has identical
+//          rights, so unlike the old single-organizer handoff this needs
+//          no one's acceptance - it only works when there's at least one
+//          other owner to leave in charge; the sole owner has to cancel
+//          it (DELETE /:id) or promote someone else first (POST
+//          /:id/invite-owner).
 // @access  Private
 router.post('/:id/step-down', protect, async (req, res) => {
   try {
@@ -1371,67 +1190,23 @@ router.post('/:id/step-down', protect, async (req, res) => {
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    if (event.organizer.toString() === req.user.id) {
-      return res.status(400).json({ success: false, message: 'The organizer cannot step down' });
-    }
     if (!event.admins.some(id => id.toString() === req.user.id)) {
       return res.status(400).json({ success: false, message: 'You are not an owner of this event' });
     }
-    event.admins = event.admins.filter(id => id.toString() !== req.user.id);
-    await event.save();
-    try {
-      await postSystemAnnouncement(event, `${req.user.name || 'Someone'} stepped down as an owner of "${event.name}"`, req);
-    } catch (announceError) {
-      console.error('⚠️ Failed to post step-down announcement:', announceError);
-    }
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error in step-down:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// @route   POST /api/events/:id/organizer-step-down
-// @desc    The organizer hands off the role to an existing owner and
-//          becomes a plain roster member (not removed - see
-//          accept-transfer-ownership, which does the same "outgoing
-//          organizer becomes a member" for the accept-required transfer
-//          flow). Unlike POST /:id/transfer-ownership, this only works
-//          when there's already a promoted owner to hand straight to
-//          (that's the mobile client's cue for whether to show "Step
-//          Down" or "Cancel" on an event/group's manage row) - no
-//          acceptance is needed since they're already trusted. With no
-//          owner to hand off to, the organizer's only option is
-//          cancelling it via DELETE /:id.
-// @access  Private
-router.post('/:id/organizer-step-down', protect, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-    if (event.organizer.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'Only the organizer can step down this way' });
-    }
-    const remainingAdmins = event.admins.filter(id => id.toString() !== req.user.id);
-    if (remainingAdmins.length === 0) {
+    if (event.isSoleOwner(req.user.id)) {
       return res.status(400).json({
         success: false,
-        message: 'There\'s no other owner to hand this off to - cancel it instead'
+        message: 'You\'re the only owner - cancel it or promote someone else first'
       });
     }
 
-    const previousOrganizerId = req.user.id;
-    const [newOrganizerId] = remainingAdmins;
-    event.organizer = newOrganizerId;
-    event.admins = remainingAdmins.filter(id => id.toString() !== newOrganizerId.toString());
+    const userId = req.user.id;
+    event.admins = event.admins.filter(id => id.toString() !== userId);
 
-    // The organizer usually isn't on their own roster (they never applied
-    // to their own event) - add them as an accepted member now instead of
-    // leaving them with no roster entry at all.
-    if (!event.applicants.some(a => a.userId.toString() === previousOrganizerId)) {
+    let becameMember = false;
+    if (!event.applicants.some(a => a.userId.toString() === userId)) {
       event.applicants.push({
-        userId: previousOrganizerId,
+        userId,
         status: 'accepted',
         appliedAt: new Date(),
         respondedAt: new Date()
@@ -1439,40 +1214,37 @@ router.post('/:id/organizer-step-down', protect, async (req, res) => {
       if (event.type === 'event') {
         event.currentAttendees = (event.currentAttendees || 0) + 1;
       }
+      becameMember = true;
     }
     await event.save();
 
-    const existingParticipation = await Participation.findOne({ event: event._id, participant: previousOrganizerId });
-    if (!existingParticipation) {
-      await Participation.create({
-        event: event._id,
-        participant: previousOrganizerId,
-        status: 'accepted',
-        joinMethod: 'ownership_transfer',
-        acceptedBy: newOrganizerId,
-        acceptedAt: new Date(),
-        isArchived: false
-      });
-    } else if (existingParticipation.isArchived) {
-      existingParticipation.isArchived = false;
-      existingParticipation.status = 'accepted';
-      await existingParticipation.save();
+    if (becameMember) {
+      const existingParticipation = await Participation.findOne({ event: event._id, participant: userId });
+      if (!existingParticipation) {
+        await Participation.create({
+          event: event._id,
+          participant: userId,
+          status: 'accepted',
+          joinMethod: 'ownership_transfer',
+          acceptedBy: userId,
+          acceptedAt: new Date(),
+          isArchived: false
+        });
+      } else if (existingParticipation.isArchived) {
+        existingParticipation.isArchived = false;
+        existingParticipation.status = 'accepted';
+        await existingParticipation.save();
+      }
     }
 
     try {
-      const newOrganizer = await User.findById(newOrganizerId).select('name');
-      await postSystemAnnouncement(
-        event,
-        `${req.user.name || 'The organizer'} stepped down - ${newOrganizer?.name || 'an existing owner'} is now the organizer of "${event.name}".`,
-        req
-      );
+      await postSystemAnnouncement(event, `${req.user.name || 'Someone'} stepped down as an owner of "${event.name}"`, req);
     } catch (announceError) {
-      console.error('⚠️ Failed to post organizer-step-down announcement:', announceError);
+      console.error('⚠️ Failed to post step-down announcement:', announceError);
     }
-
     res.json({ success: true, message: 'Stepped down - you\'re now a member' });
   } catch (error) {
-    console.error('Error in organizer-step-down:', error);
+    console.error('Error in step-down:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1495,9 +1267,6 @@ router.post('/:id/kick', protect, async (req, res) => {
     }
     if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
-    }
-    if (event.organizer.toString() === userId) {
-      return res.status(400).json({ success: false, message: "Can't remove the organizer" });
     }
     if (event.admins.some(id => id.toString() === userId)) {
       return res.status(403).json({ success: false, message: "Owners can't remove other owners - they have to step down themselves" });
@@ -1557,7 +1326,10 @@ router.post('/:id/kick', protect, async (req, res) => {
 //          kick's cleanup (this is "kick yourself"), plus records a
 //          'pass' swipe so the event doesn't come back around in their
 //          LFG feed - without that, leaving would just look like a fresh
-//          unswiped event again the next time they browse.
+//          unswiped event again the next time they browse. An owner can
+//          leave the same way as long as they're not the only one - the
+//          sole owner has to cancel it or promote someone else first,
+//          same rule as POST /:id/step-down.
 // @access  Private
 router.post('/:id/leave', protect, async (req, res) => {
   try {
@@ -1566,31 +1338,36 @@ router.post('/:id/leave', protect, async (req, res) => {
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    if (event.organizer.toString() === userId) {
+    const isOwner = event.admins.some(id => id.toString() === userId);
+    if (isOwner && event.isSoleOwner(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'The organizer can\'t leave - transfer ownership to someone else first'
+        message: 'You\'re the only owner - cancel it or promote someone else first'
       });
     }
 
     const applicantIndex = event.applicants.findIndex(a => a.userId.toString() === userId);
-    if (applicantIndex === -1) {
+    if (applicantIndex === -1 && !isOwner) {
       return res.status(404).json({ success: false, message: 'You are not on this roster' });
     }
-    const wasAccepted = event.applicants[applicantIndex].status === 'accepted';
-    event.applicants.splice(applicantIndex, 1);
-    event.admins = event.admins.filter(id => id.toString() !== userId);
-    if (wasAccepted && event.type === 'event') {
-      event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+
+    let wasAccepted = false;
+    if (applicantIndex !== -1) {
+      wasAccepted = event.applicants[applicantIndex].status === 'accepted';
+      event.applicants.splice(applicantIndex, 1);
+      if (wasAccepted && event.type === 'event') {
+        event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+      }
+    }
+    if (isOwner) {
+      event.admins = event.admins.filter(id => id.toString() !== userId);
     }
     await event.save();
 
     const user = await User.findById(userId);
     await User.findByIdAndUpdate(userId, { $pull: { eventsJoined: { eventId: event._id } } });
-    if (wasAccepted) {
-      await Match.deleteOne({ individual: userId, event: event._id });
-      await Participation.deleteOne({ event: event._id, participant: userId });
-    }
+    await Match.deleteOne({ individual: userId, event: event._id });
+    await Participation.deleteOne({ event: event._id, participant: userId });
     // Mark it passed for this user specifically - addSwipe overwrites any
     // existing swipe on this event (the 'like' from when they applied),
     // it doesn't just add a second one.
@@ -1654,7 +1431,7 @@ router.post('/join/:code', protect, async (req, res) => {
     if (!joinsDirectly && event.inviteGroupIds?.length) {
       const groups = await Event.find({ _id: { $in: event.inviteGroupIds } });
       joinsDirectly = groups.some(group =>
-        group.organizer.toString() === req.user.id ||
+        group.canUserManage(req.user.id) ||
         group.applicants.some(app => app.userId.toString() === req.user.id && app.status === 'accepted')
       );
     }

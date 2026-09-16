@@ -126,10 +126,26 @@ async function sendWelcomeMessage(toUserId, req) {
   await ensureWelcomeSent(botId, toUserId, req);
 }
 
+// A plain-text bot announcement into an event/group's own chat - "X
+// joined", "X is now an owner", "X stepped down", "X was removed".
+// Non-fatal by design (callers wrap this in try/catch): the roster
+// change itself already succeeded by the time this runs, so a failure
+// posting the announcement shouldn't undo or fail that.
+async function postSystemAnnouncement(event, text, req) {
+  const botId = await getBotUserId();
+  const message = await Message.createEventMessage(event._id, botId, text, event.type);
+  await message.populate('sender', 'name photos');
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+  }
+}
+
 module.exports = {
   getOrCreatePrivateConnection,
   pushIfOffline,
   postPrivateNotification,
   sendBotNotice,
-  sendWelcomeMessage
+  sendWelcomeMessage,
+  postSystemAnnouncement
 };

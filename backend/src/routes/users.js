@@ -7,11 +7,10 @@ const Event = require('../models/Event');
 const Match = require('../models/Match');
 const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
-const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { getBotUserId } = require('../services/botUser');
-const { getOrCreatePrivateConnection, sendWelcomeMessage } = require('../services/botNotice');
+const { getOrCreatePrivateConnection, sendWelcomeMessage, postSystemAnnouncement } = require('../services/botNotice');
 const { cancelEventForRoster } = require('../services/eventLifecycle');
 
 // No need for category validation since users don't have preferred categories
@@ -593,26 +592,24 @@ router.delete('/me', protect, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const organizedEvents = await Event.find({ organizer: userId, isArchived: { $ne: true } });
-    const botId = await getBotUserId();
+    // Every owner has identical rights (see Event.canUserManage) - there's
+    // no single "organizer" to hand off, just whichever other owners are
+    // still on it.
+    const ownedEvents = await Event.find({ admins: userId, isArchived: { $ne: true } });
 
-    for (const event of organizedEvents) {
+    for (const event of ownedEvents) {
       const remainingAdmins = event.admins.filter(id => id.toString() !== userId);
       if (remainingAdmins.length > 0) {
-        const [newOrganizerId] = remainingAdmins;
-        event.organizer = newOrganizerId;
-        event.admins = remainingAdmins.filter(id => id.toString() !== newOrganizerId.toString());
+        event.admins = remainingAdmins;
         await event.save();
         try {
-          const newOrganizer = await User.findById(newOrganizerId).select('name');
-          await Message.createEventMessage(
-            event._id,
-            botId,
-            `${newOrganizer?.name || 'An existing owner'} is now the organizer of "${event.name}" - the previous organizer's account was deleted.`,
-            event.type
+          await postSystemAnnouncement(
+            event,
+            `${req.user.name || 'An owner'} is no longer an owner of "${event.name}" - their account was deleted.`,
+            req
           );
         } catch (announceError) {
-          console.error('⚠️ Failed to post organizer-handoff announcement:', announceError);
+          console.error('⚠️ Failed to post owner-removed announcement:', announceError);
         }
       } else {
         // No one else to hand it to - cancel it the same way DELETE

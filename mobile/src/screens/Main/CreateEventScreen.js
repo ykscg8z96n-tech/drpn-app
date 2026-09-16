@@ -222,12 +222,12 @@ const SwipeableEventItem = ({ item, onArchive, onStepDown, onEdit, onViewApplica
                   <Text style={styles.actionButtonText}>Invite</Text>
                 </TouchableOpacity>
 
-                {/* An organizer with another owner already promoted can
-                    hand off and leave in one step instead of cancelling
-                    the whole thing - a plain owner (not the organizer)
-                    only ever gets Cancel, since step-down is specifically
-                    the organizer-role handoff. */}
-                {item.role === 'organizer' && item.admins?.length > 0 ? (
+                {/* Every owner has identical rights - if there's another
+                    owner to leave in charge, stepping down hands off and
+                    keeps you as a member instead of cancelling the whole
+                    thing. The sole owner only ever gets Cancel, since
+                    there'd be no one left to manage it otherwise. */}
+                {item.admins?.length > 1 ? (
                   <TouchableOpacity
                     style={styles.archiveButton}
                     onPress={() => onStepDown(item)}
@@ -304,12 +304,10 @@ const SwipeableEventItem = ({ item, onArchive, onStepDown, onEdit, onViewApplica
                         {getBadgeLabel(item)}
                       </Text>
                     </View>
-                    {item.role && (
+                    {item.role === 'owner' && (
                       <View style={styles.roleBadge}>
                         <Ionicons name="star" size={10} color="#FFD700" />
-                        <Text style={styles.roleBadgeText}>
-                          {item.role === 'organizer' ? 'Organizer' : 'Owner'}
-                        </Text>
+                        <Text style={styles.roleBadgeText}>Owner</Text>
                       </View>
                     )}
                   </View>
@@ -403,18 +401,11 @@ export default function CreateEventScreen({ navigation }) {
           if (item.event.type === 'event' && new Date(item.event.eventDate) < new Date()) return false;
           return true;
         })
-        .map(item => {
-          const isDirectOrganizer = item.event.organizer?._id === user?.id || item.event.organizer === user?.id;
-          return {
-            ...item.event,
-            // An owner (promoted, not just the organizer) gets the same
-            // manage capabilities - Edit/Archive/Invite on the swipe row.
-            isMyEvent: item.userRole === 'organizer'
-              || item.userRole === 'owner'
-              || isDirectOrganizer,
-            role: item.userRole === 'owner' ? 'owner' : (item.userRole === 'organizer' || isDirectOrganizer) ? 'organizer' : null
-          };
-        });
+        .map(item => ({
+          ...item.event,
+          isMyEvent: item.userRole === 'owner',
+          role: item.userRole === 'owner' ? 'owner' : null
+        }));
 
       setMyEvents(events);
     } catch (error) {
@@ -512,7 +503,7 @@ export default function CreateEventScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.post(`/events/${event._id}/organizer-step-down`);
+              await api.post(`/events/${event._id}/step-down`);
               await loadMyEvents();
               Alert.alert('Success', `You stepped down and are now a member of the ${noun}`);
             } catch (error) {

@@ -257,7 +257,7 @@ export default function ChatScreen({ route, navigation }) {
           >
             <Ionicons name="people-outline" size={22} color="#0078FF" />
           </TouchableOpacity>
-          {!isOrganizer(user?.id) && (
+          {!isSoleOwner(user?.id) && (
             <TouchableOpacity style={styles.headerLeaveButton} onPress={handleLeave}>
               <Text style={styles.headerLeaveButtonText}>Leave</Text>
             </TouchableOpacity>
@@ -415,8 +415,15 @@ export default function ChatScreen({ route, navigation }) {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
   };
 
-  const isOrganizer = (userId) => {
-    return eventData?.organizer === userId || eventData?.organizer?._id === userId;
+  // Every owner has identical rights - there's no more-powerful
+  // "organizer" tier for a regular event/group.
+  const isOwner = (userId) => {
+    return (eventData?.admins || []).some(a => (a._id || a) === userId);
+  };
+
+  const isSoleOwner = (userId) => {
+    const admins = eventData?.admins || [];
+    return admins.length === 1 && (admins[0]._id || admins[0]) === userId;
   };
 
   // A cancelled event/group is removed from every roster member's feed
@@ -535,7 +542,7 @@ export default function ChatScreen({ route, navigation }) {
     }
 
     const isOwn = item.sender?._id === user?.id || item.isOwn;
-    const isOrganizerMessage = isOrganizer(item.sender?._id);
+    const isOrganizerMessage = isOwner(item.sender?._id);
     const senderName = item.sender?.name || 'Unknown User';
 
     const previousMessage = index > 0 ? messages[index - 1] : null;

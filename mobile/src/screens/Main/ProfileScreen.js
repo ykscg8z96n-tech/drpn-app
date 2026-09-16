@@ -938,7 +938,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.passwordModalTitle}>Delete Account</Text>
           <Text style={styles.deleteConfirmText}>
             This permanently deletes your profile, photos, and connections. Events/groups you
-            solely organize will be handed to another owner or archived. This can't be undone.
+            co-own stay open with the other owner(s); ones you solely own get cancelled. This can't be undone.
           </Text>
           <Text style={styles.deleteConfirmLabel}>Type DELETE to confirm</Text>
           <TextInput

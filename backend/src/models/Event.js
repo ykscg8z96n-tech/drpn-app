@@ -113,7 +113,11 @@ const eventSchema = new mongoose.Schema({
     default: []
   },
 
-  // Organizer and admin management
+  // Who created it - purely informational (e.g. "created by" display).
+  // Ownership/management rights all live in `admins` now, not here - see
+  // canUserManage(). "Organizer" as a special, more-powerful role is
+  // reserved for a future company/branded-events feature with its own
+  // separate logic, not the regular event/group flow.
   organizer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -389,10 +393,17 @@ eventSchema.methods.closeIfFull = function() {
   });
 };
 
-// Method to check if user is organizer or admin
+// Every owner has identical rights - there's no more-powerful "organizer"
+// tier for a regular event/group (see the `organizer` field's comment).
 eventSchema.methods.canUserManage = function(userId) {
-  return this.organizer.toString() === userId.toString() || 
-         this.admins.some(adminId => adminId.toString() === userId.toString());
+  return this.admins.some(adminId => adminId.toString() === userId.toString());
+};
+
+// The one owner-only action that's actually different by owner count:
+// leaving/stepping down needs someone else to hand the reins to. Used by
+// both POST /:id/leave and POST /:id/step-down.
+eventSchema.methods.isSoleOwner = function(userId) {
+  return this.admins.length === 1 && this.admins[0].toString() === userId.toString();
 };
 
 // Method to generate unique invite code
