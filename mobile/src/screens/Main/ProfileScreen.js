@@ -26,15 +26,6 @@ import { toDateOnlyString, parseDateOnly } from '../../utils/dateOnly';
 
 const { width, height } = Dimensions.get('window');
 
-// Matches the format DateTimeInput's own display uses, so the field
-// doesn't visibly change format the moment you save.
-const formatDateOnly = (dateString) => {
-  const date = parseDateOnly(dateString);
-  return date
-    ? date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-    : null;
-};
-
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
@@ -44,10 +35,8 @@ export default function ProfileScreen({ navigation }) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editingBasics, setEditingBasics] = useState(false);
   const [editingName, setEditingName] = useState(false);
-  const [editingBirthday, setEditingBirthday] = useState(false);
   const [editingLocation, setEditingLocation] = useState(false);
   const [tempName, setTempName] = useState('');
-  const [tempBirthday, setTempBirthday] = useState('');
   const [tempLocationText, setTempLocationText] = useState('');
   const [tempLocationPlace, setTempLocationPlace] = useState(null);
   const [savingLocation, setSavingLocation] = useState(false);
@@ -333,27 +322,11 @@ export default function ProfileScreen({ navigation }) {
     setEditingName(false);
   };
 
-  const startEditingBirthday = () => {
-    // DateTimeInput's value needs an exact 'YYYY-MM-DD' string, but
-    // profile.birthDate comes back from the API as a full ISO timestamp -
-    // trim it down.
-    setTempBirthday(profile?.birthDate ? profile.birthDate.split('T')[0] : '');
-    setEditingBirthday(true);
-  };
-
-  const saveBirthdayChanges = async () => {
-    if (tempBirthday.trim()) {
-      const success = await updateProfile({ birthDate: tempBirthday.trim() });
-      if (success) {
-        setEditingBirthday(false);
-        Alert.alert('Success', 'Birthday updated!');
-      }
+  const saveBirthdayChanges = async (date) => {
+    const success = await updateProfile({ birthDate: toDateOnlyString(date) });
+    if (success) {
+      Alert.alert('Success', 'Birthday updated!');
     }
-  };
-
-  const cancelBirthdayEdit = () => {
-    setTempBirthday('');
-    setEditingBirthday(false);
   };
 
   const saveBioChanges = async () => {
@@ -662,41 +635,23 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Birthday Field */}
+        {/* Birthday Field - DateTimeInput's own button/modal is the
+            edit affordance (opening it, picking a date, and tapping its
+            Done IS "editing"), so there's no separate Edit/Cancel/Save
+            row layered on top like the other fields - just save the
+            moment a date comes back. */}
         <View style={styles.editableInfoItem}>
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color="#666666" />
             <View style={styles.inputContainer}>
-              {editingBirthday ? (
-                <DateTimeInput
-                  mode="date"
-                  value={tempBirthday ? parseDateOnly(tempBirthday) : null}
-                  onChange={(date) => setTempBirthday(toDateOnlyString(date))}
-                  maximumDate={new Date()}
-                  placeholder="Select birthday"
-                />
-              ) : (
-                <Text style={styles.fieldValue}>
-                  {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
-                </Text>
-              )}
+              <DateTimeInput
+                mode="date"
+                value={profile?.birthDate ? parseDateOnly(profile.birthDate) : null}
+                onChange={saveBirthdayChanges}
+                maximumDate={new Date()}
+                placeholder="Add birthday"
+              />
             </View>
-          </View>
-          <View style={styles.editButtonContainer}>
-            {editingBirthday ? (
-              <>
-                <TouchableOpacity style={styles.editButton} onPress={cancelBirthdayEdit}>
-                  <Text style={styles.editButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity style={styles.editButton} onPress={startEditingBirthday}>
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
