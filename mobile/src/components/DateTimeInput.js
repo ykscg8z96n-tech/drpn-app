@@ -17,7 +17,7 @@
 //   scratch, in a modal styled to match the rest of the app - replacing
 //   what used to be a bare MM/DD/YYYY text mask with no real calendar
 //   and no time field.
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -132,15 +132,18 @@ function YearGrid({ selectedYear, minimumDate, maximumDate, onSelectYear }) {
   }
   const selectedRowIndex = rows.findIndex(row => row.includes(selectedYear));
 
+  // Re-scroll whenever the year arrows move `selectedYear` outside the
+  // page that's currently in view, not just on first open.
+  useEffect(() => {
+    if (selectedRowIndex >= 0) {
+      scrollRef.current?.scrollTo({ y: selectedRowIndex * 48, animated: true });
+    }
+  }, [selectedRowIndex]);
+
   return (
     <ScrollView
       ref={scrollRef}
       style={styles.yearScroll}
-      onLayout={() => {
-        if (selectedRowIndex > 0) {
-          scrollRef.current?.scrollTo({ y: selectedRowIndex * 48, animated: false });
-        }
-      }}
     >
       {rows.map((row, i) => (
         <View key={i} style={styles.yearRow}>
@@ -251,6 +254,13 @@ function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
     setVisibleMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
   };
 
+  // In year-grid view the arrows page by a decade instead of a month -
+  // shiftMonth(±1) rarely even crosses a year boundary, which is why
+  // they looked like they did nothing while picking a birth year.
+  const shiftYears = (delta) => {
+    setVisibleMonth(prev => new Date(prev.getFullYear() + delta * 10, prev.getMonth(), 1));
+  };
+
   const handleDone = () => {
     const result = new Date(selectedDate);
     if (mode === 'date') {
@@ -267,11 +277,10 @@ function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
         <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <View style={styles.sheetHeader}>
             <TouchableOpacity
-              onPress={() => shiftMonth(-1)}
+              onPress={() => (showYearGrid ? shiftYears(-1) : shiftMonth(-1))}
               style={styles.monthNavButton}
-              disabled={showYearGrid}
             >
-              <Ionicons name="chevron-back" size={22} color={showYearGrid ? '#333333' : '#FFFFFF'} />
+              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.monthTitleButton}
@@ -283,11 +292,10 @@ function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
               <Ionicons name={showYearGrid ? 'chevron-up' : 'chevron-down'} size={16} color="#999999" />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => shiftMonth(1)}
+              onPress={() => (showYearGrid ? shiftYears(1) : shiftMonth(1))}
               style={styles.monthNavButton}
-              disabled={showYearGrid}
             >
-              <Ionicons name="chevron-forward" size={22} color={showYearGrid ? '#333333' : '#FFFFFF'} />
+              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
