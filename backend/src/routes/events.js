@@ -427,15 +427,9 @@ router.post('/', [protect,
       }
     } else if (req.body.type === 'group') {
       if (!req.body.groupSize || req.body.groupSize < 2) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Group size must be at least 2' 
-        });
-      }
-      if (!req.body.meetingFrequency) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Meeting frequency is required for groups' 
+        return res.status(400).json({
+          success: false,
+          message: 'Group size must be at least 2'
         });
       }
     }
@@ -582,7 +576,7 @@ router.put('/:id', [protect,
     }
 
     // CHANGED: Update allowed fields to include category instead of interests
-    const allowedUpdates = ['name', 'description', 'category', 'categories', 'eventDate', 'capacity', 'groupSize', 'meetingFrequency', 'ageRange', 'genderPreference', 'location', 'isPublic'];
+    const allowedUpdates = ['name', 'description', 'category', 'categories', 'eventDate', 'capacity', 'groupSize', 'ageRange', 'genderPreference', 'location', 'isPublic'];
     const updates = {};
 
     allowedUpdates.forEach(field => {

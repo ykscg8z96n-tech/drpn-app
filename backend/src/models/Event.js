@@ -79,12 +79,7 @@ const eventSchema = new mongoose.Schema({
     type: Number,
     required: function() { return this.type === 'group'; }
   },
-  meetingFrequency: {
-    type: String,
-    enum: ['weekly', 'biweekly', 'monthly', 'varies'],
-    required: function() { return this.type === 'group'; }
-  },
-  
+
   // Set when this event was auto-invited to one or more groups the
   // organizer runs - lets those groups' members join directly (first-
   // come-first-served up to capacity) instead of going through the

@@ -75,7 +75,6 @@ export default function EditEventScreen({ route, navigation }) {
    capacity:   event.type === 'event' ? (event.capacity?.toString() || '') : undefined,    // only for events
    eventDate:  event.type === 'event' ? new Date(event.eventDate) : undefined,
    groupSize:  event.type === 'group' ? (event.groupSize?.toString() || '') : undefined,    // only for groups
-   meetingFrequency: event.type === 'group' ? (event.meetingFrequency || '') : undefined,
    isRecurring:       event.isRecurring || false,
    recurringPattern:  event.recurringPattern || 'weekly',
    isPublic:          event.isPublic !== undefined ? event.isPublic : true,
@@ -209,10 +208,6 @@ export default function EditEventScreen({ route, navigation }) {
     } else {
       if (!formData.groupSize) {
         Alert.alert('Error', 'Please enter group size');
-        return;
-      }
-      if (!formData.meetingFrequency) {
-        Alert.alert('Error', 'Please select meeting frequency');
         return;
       }
     }
@@ -499,42 +494,17 @@ export default function EditEventScreen({ route, navigation }) {
           )}
 
           {event.type === 'group' && (
-            <>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Group Size</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.groupSize}
-                  onChangeText={(text) => setFormData({ ...formData, groupSize: text })}
-                  placeholder="Ideal number of members"
-                  placeholderTextColor="#666"
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Meeting Frequency</Text>
-                <View style={styles.frequencyContainer}>
-                  {['weekly', 'biweekly', 'monthly', 'varies'].map((freq) => (
-                    <TouchableOpacity
-                      key={freq}
-                      style={[
-                        styles.frequencyButton,
-                        formData.meetingFrequency === freq && styles.frequencyButtonActive
-                      ]}
-                      onPress={() => setFormData({ ...formData, meetingFrequency: freq })}
-                    >
-                      <Text style={[
-                        styles.frequencyButtonText,
-                        formData.meetingFrequency === freq && styles.frequencyButtonTextActive
-                      ]}>
-                        {freq === 'biweekly' ? 'Bi-weekly' : freq.charAt(0).toUpperCase() + freq.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Group Size</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.groupSize}
+                onChangeText={(text) => setFormData({ ...formData, groupSize: text })}
+                placeholder="Ideal number of members"
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+              />
+            </View>
           )}
 
           {/* Auto-invite existing groups - lets one group's members join
@@ -877,34 +847,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  
-  // Frequency buttons
-  frequencyContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  frequencyButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#333333',
-    borderWidth: 1,
-    borderColor: '#666666',
-  },
-  frequencyButtonActive: {
-    backgroundColor: '#0078FF',
-    borderColor: '#0078FF',
-  },
-  frequencyButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  frequencyButtonTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  
+
   // Privacy Notice
   privacyNotice: {
     flexDirection: 'row',
