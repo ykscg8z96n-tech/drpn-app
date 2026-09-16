@@ -32,6 +32,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
+  const [inputHeight, setInputHeight] = useState(20);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
@@ -324,6 +325,7 @@ export default function ChatScreen({ route, navigation }) {
     if (!text || sending) return;
 
     setMessageText('');
+    setInputHeight(20);
 
     const clientId = `${user?.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const roomChatId = `${eventType}-${finalChatId}`;
@@ -552,9 +554,10 @@ export default function ChatScreen({ route, navigation }) {
       <View style={styles.inputWrapper}>
         <View style={styles.textInputContainer}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { height: Math.min(inputHeight, 84) }]}
             value={messageText}
             onChangeText={setMessageText}
+            onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
             placeholder="Message"
             placeholderTextColor="#999999"
             multiline
