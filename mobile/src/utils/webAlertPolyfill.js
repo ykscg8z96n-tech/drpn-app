@@ -5,8 +5,8 @@
 // anything and never calls a button's onPress. Every confirm/cancel flow
 // built on Alert.alert (there are a dozen call sites across the app)
 // silently hangs on web: a screen that awaits the user's choice before
-// continuing - e.g. CreateEventScreen's "become an organizer?" prompt
-// before loadMyEvents() runs - never gets an answer, so it never
+// continuing - e.g. CreateEventScreen's "cancel this event?" prompt
+// before the DELETE request fires - never gets an answer, so it never
 // proceeds. This replaces Alert.alert with a real implementation on web,
 // using the browser's built-in alert()/confirm(), so every existing call
 // site starts working without being rewritten individually.
