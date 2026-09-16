@@ -115,7 +115,7 @@ export default function JoinByCodeScreen({ navigation, route }) {
         <View style={styles.content}>
           {/* Header Icon */}
           <View style={styles.iconContainer}>
-            <Ionicons name="ticket" size={48} color="#6366F1" />
+            <Ionicons name="ticket" size={48} color="#0078FF" />
           </View>
 
           {/* Title and Description */}
@@ -163,15 +163,15 @@ export default function JoinByCodeScreen({ navigation, route }) {
           <View style={styles.howItWorksContainer}>
             <Text style={styles.howItWorksTitle}>How it works:</Text>
             <View style={styles.step}>
-              <Ionicons name="share-outline" size={16} color="#9CA3AF" />
+              <Ionicons name="share-outline" size={16} color="#999999" />
               <Text style={styles.stepText}>Event organizers share invite codes</Text>
             </View>
             <View style={styles.step}>
-              <Ionicons name="text-outline" size={16} color="#9CA3AF" />
+              <Ionicons name="text-outline" size={16} color="#999999" />
               <Text style={styles.stepText}>Enter the code above</Text>
             </View>
             <View style={styles.step}>
-              <Ionicons name="people-outline" size={16} color="#9CA3AF" />
+              <Ionicons name="people-outline" size={16} color="#999999" />
               <Text style={styles.stepText}>Instantly join the event and start chatting</Text>
             </View>
           </View>
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: '#9CA3AF',
+    color: '#999999',
     textAlign: 'center',
     lineHeight: 21,
     marginBottom: 20,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   joinButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#0078FF',
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   joinButtonDisabled: {
-    backgroundColor: '#374151',
+    backgroundColor: '#333333',
   },
   buttonIcon: {
     marginRight: 8,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   },
   stepText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#999999',
     marginLeft: 12,
     flex: 1,
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   browseButtonText: {
     fontSize: 16,
-    color: '#6366F1',
+    color: '#0078FF',
     fontWeight: '500',
   },
 });
