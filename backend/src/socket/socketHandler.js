@@ -162,24 +162,29 @@ const handleConnection = (io) => {
           const recipientIds = participants
             .map(p => (p.participant?._id || p.participant)?.toString())
             .filter(id => id && id !== socket.userId && !isUserOnline(id));
+          console.log(`🔔 Push check (${chatType}): ${recipientIds.length} offline recipient(s) of ${participants.length} total`);
           recipientIds.forEach(id => {
             sendPushToUser(id, {
               title: `${senderName} in ${message.chatId.split('-')[0] === 'group' ? 'your group' : 'your event'}`,
               body: preview,
               url: '/'
-            }).catch(err => console.error('⚠️ Push notify (event) failed:', err));
+            }).then(sent => console.log(`🔔 Push to ${id}: ${sent ? 'sent' : 'skipped (no subscription/VAPID)'}`))
+              .catch(err => console.error('⚠️ Push notify (event) failed:', err));
           });
         } else if (chatType === 'private') {
           const connection = await getPrivateConnection(chatId, socket.userId);
           if (connection) {
             const recipientId = [connection.participant?.toString(), connection.otherUser?.toString()]
               .find(id => id && id !== socket.userId);
-            if (recipientId && !isUserOnline(recipientId)) {
+            const recipientOnline = recipientId && isUserOnline(recipientId);
+            console.log(`🔔 Push check (private): recipient=${recipientId} online=${recipientOnline}`);
+            if (recipientId && !recipientOnline) {
               sendPushToUser(recipientId, {
                 title: senderName,
                 body: preview,
                 url: '/'
-              }).catch(err => console.error('⚠️ Push notify (private) failed:', err));
+              }).then(sent => console.log(`🔔 Push to ${recipientId}: ${sent ? 'sent' : 'skipped (no subscription/VAPID)'}`))
+                .catch(err => console.error('⚠️ Push notify (private) failed:', err));
             }
           }
         }

@@ -14,13 +14,20 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 // prunes any that the push service reports as gone (410/404 - the user
 // uninstalled, cleared site data, etc) instead of retrying them forever.
 async function sendPushToUser(userId, { title, body, url }) {
-  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return;
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    console.warn('🔔 Push skipped: VAPID keys not configured on this server');
+    return false;
+  }
 
   const user = await User.findById(userId).select('webPushSubscriptions');
-  if (!user || !user.webPushSubscriptions?.length) return;
+  if (!user || !user.webPushSubscriptions?.length) {
+    console.log(`🔔 Push skipped: user ${userId} has no registered subscriptions`);
+    return false;
+  }
 
   const payload = JSON.stringify({ title, body, url });
   const deadEndpoints = [];
+  let sentCount = 0;
 
   await Promise.all(user.webPushSubscriptions.map(async (sub) => {
     try {
@@ -28,6 +35,7 @@ async function sendPushToUser(userId, { title, body, url }) {
         { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
         payload
       );
+      sentCount++;
     } catch (error) {
       if (error.statusCode === 410 || error.statusCode === 404) {
         deadEndpoints.push(sub.endpoint);
@@ -43,6 +51,8 @@ async function sendPushToUser(userId, { title, body, url }) {
       { $pull: { webPushSubscriptions: { endpoint: { $in: deadEndpoints } } } }
     );
   }
+
+  return sentCount > 0;
 }
 
 module.exports = { sendPushToUser };
