@@ -87,7 +87,7 @@ const TypeBadge = ({ type }) => (
   </View>
 );
 
-export default function EventCard({ event, distance, onImagePress, onExpandChange }) {
+export default function EventCard({ event, distance, onImagePress, onExpandChange, cardHeight }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
@@ -289,7 +289,7 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, cardHeight != null && { height: cardHeight }]}>
       {/* Main Image */}
       <TouchableOpacity 
         style={styles.imageContainer}
