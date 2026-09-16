@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   imageContainer: {
-    height: '60%',
+    height: '70%',
     position: 'relative',
   },
   eventImage: {

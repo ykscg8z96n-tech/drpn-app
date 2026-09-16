@@ -60,6 +60,7 @@ export default function EditEventScreen({ route, navigation }) {
   );
   const [selectedImage, setSelectedImage] = useState(null);
 
+ const [descriptionHeight, setDescriptionHeight] = useState(100);
  const [formData, setFormData] = useState({
    name: event.name || '',
    description: event.description || '',
@@ -332,9 +333,10 @@ export default function EditEventScreen({ route, navigation }) {
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Description</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, { height: Math.max(100, descriptionHeight) }]}
               value={formData.description}
               onChangeText={(text) => setFormData({ ...formData, description: text })}
+              onContentSizeChange={(e) => setDescriptionHeight(e.nativeEvent.contentSize.height)}
               placeholder={`Describe your ${event.type}`}
               placeholderTextColor="#666"
               multiline
@@ -582,8 +584,8 @@ export default function EditEventScreen({ route, navigation }) {
             <Text style={styles.label}>Auto-invite Groups</Text>
             <Text style={styles.helperText}>
               {event.type === 'event'
-                ? "Post a clickable invite card into one or more of your groups' chats"
-                : "Post a clickable invite card into one or more of your other groups' chats, so their members can join this group"
+                ? "Post a clickable invite card into one or more of your groups' chats. Members who tap it will be automatically accepted into this event on a first come, first served basis."
+                : "Post a clickable invite card into one or more of your other groups' chats, so their members can join this group. Members who tap it will be automatically accepted into this group on a first come, first served basis."
               }
             </Text>
 
@@ -773,7 +775,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   textArea: {
-    height: 100,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
   helperText: {
