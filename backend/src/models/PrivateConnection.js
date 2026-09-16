@@ -16,11 +16,12 @@ const privateConnectionSchema = new mongoose.Schema({
     required: true
   },
   
-  // Original event/group where these users met
+  // Original event/group where these users met - null for the bot's
+  // welcome/notices thread, which isn't tied to any one event or group
+  // (see services/botNotice.js).
   originEvent: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Event',
-    required: true
+    ref: 'Event'
   },
   
   // Connection status
