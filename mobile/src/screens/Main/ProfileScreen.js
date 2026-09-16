@@ -26,6 +26,16 @@ import { toDateOnlyString, parseDateOnly } from '../../utils/dateOnly';
 
 const { width, height } = Dimensions.get('window');
 
+// Deliberately no weekday - see DateTimeInput's own formatDateTime,
+// which drops it for mode="date" too; this is just the closed-state
+// display shown before Edit is tapped.
+const formatBirthday = (dateString) => {
+  const date = parseDateOnly(dateString);
+  return date
+    ? date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+};
+
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
@@ -35,6 +45,7 @@ export default function ProfileScreen({ navigation }) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editingBasics, setEditingBasics] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const [editingBirthday, setEditingBirthday] = useState(false);
   const [editingLocation, setEditingLocation] = useState(false);
   const [tempName, setTempName] = useState('');
   const [tempLocationText, setTempLocationText] = useState('');
@@ -635,24 +646,34 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Birthday Field - DateTimeInput's own button/modal is the
-            edit affordance (opening it, picking a date, and tapping its
-            Done IS "editing"), so there's no separate Edit/Cancel/Save
-            row layered on top like the other fields - just save the
-            moment a date comes back. */}
+        {/* Birthday Field - matches Name/Location: plain text + Edit
+            button until tapped. DateTimeInput renders in controlled
+            mode here (visible/onRequestClose), so it shows no field
+            button of its own - tapping Edit brings the calendar up as
+            an overlay, and Cancel/Done both close it back down via
+            onRequestClose. */}
         <View style={styles.editableInfoItem}>
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color="#666666" />
             <View style={styles.inputContainer}>
-              <DateTimeInput
-                mode="date"
-                value={profile?.birthDate ? parseDateOnly(profile.birthDate) : null}
-                onChange={saveBirthdayChanges}
-                maximumDate={new Date()}
-                placeholder="Add birthday"
-              />
+              <Text style={styles.fieldValue}>
+                {profile?.birthDate ? formatBirthday(profile.birthDate) : 'Add birthday'}
+              </Text>
             </View>
           </View>
+          <View style={styles.editButtonContainer}>
+            <TouchableOpacity style={styles.editButton} onPress={() => setEditingBirthday(true)}>
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+          <DateTimeInput
+            mode="date"
+            value={profile?.birthDate ? parseDateOnly(profile.birthDate) : null}
+            onChange={saveBirthdayChanges}
+            maximumDate={new Date()}
+            visible={editingBirthday}
+            onRequestClose={() => setEditingBirthday(false)}
+          />
         </View>
 
         {/* Location Field - same header-then-full-width-content layout as

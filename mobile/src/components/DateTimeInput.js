@@ -49,12 +49,13 @@ function startOfDay(d) {
 }
 
 function formatDateTime(date, mode) {
-  const dateText = date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
+  // A date-only value (birthday) doesn't need its weekday - only a
+  // datetime (event) does, where "which day" is actually useful context
+  // alongside the time.
+  const dateText = date.toLocaleDateString('en-US', mode === 'date'
+    ? { month: 'short', day: 'numeric', year: 'numeric' }
+    : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
+  );
   if (mode === 'date') return dateText;
   return dateText + ' at ' + date.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -388,8 +389,23 @@ function IOSPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
 // mode: 'datetime' (default - date + time, e.g. an event) or 'date'
 // (day only, e.g. a birthday - no time stepper/wheel, no time in the
 // display text).
-export default function DateTimeInput({ value, onChange, minimumDate, maximumDate, mode = 'datetime', placeholder }) {
-  const [showWebOrIOSPicker, setShowWebOrIOSPicker] = useState(false);
+//
+// By default this renders its own tappable field button and manages its
+// own open/closed state. Passing `visible` (a boolean) switches it to
+// controlled mode instead: the field button is not rendered at all, and
+// the picker shows/hides purely based on `visible`, calling
+// `onRequestClose()` (not onChange) whenever it's dismissed - on Cancel,
+// on a backdrop tap, and right after a successful Done/selection. This
+// is for callers that already show their own "Edit" trigger and want
+// the calendar to appear as a floating overlay rather than a second
+// field-shaped button sitting inline in the page (see ProfileScreen's
+// birthday field).
+export default function DateTimeInput({ value, onChange, minimumDate, maximumDate, mode = 'datetime', placeholder, visible, onRequestClose }) {
+  const isControlled = visible !== undefined;
+  const [uncontrolledVisible, setUncontrolledVisible] = useState(false);
+  const showWebOrIOSPicker = isControlled ? visible : uncontrolledVisible;
+  const closeWebOrIOSPicker = () => (isControlled ? onRequestClose?.() : setUncontrolledVisible(false));
+
   // Android has no combined datetime mode - this tracks which native
   // dialog is currently up, chaining date -> time the way Android's own
   // apps do it. Date-only mode skips the time step entirely.
@@ -401,19 +417,36 @@ export default function DateTimeInput({ value, onChange, minimumDate, maximumDat
       setAndroidDraftDate(value || new Date());
       setAndroidStep('date');
     } else {
-      setShowWebOrIOSPicker(true);
+      setUncontrolledVisible(true);
     }
+  };
+
+  // Controlled + Android: there's no modal to toggle, so opening means
+  // kicking off the imperative dialog chain the moment the caller flips
+  // `visible` to true.
+  useEffect(() => {
+    if (isControlled && visible && Platform.OS === 'android' && androidStep === null) {
+      setAndroidDraftDate(value || new Date());
+      setAndroidStep('date');
+    }
+  }, [isControlled, visible]);
+
+  const closeAndroid = () => {
+    setAndroidStep(null);
+    if (isControlled) onRequestClose?.();
   };
 
   return (
     <>
-      <TouchableOpacity style={styles.fieldButton} onPress={openPicker}>
-        <Ionicons name="calendar" size={20} color="#0078FF" />
-        <Text style={styles.fieldButtonText}>
-          {value ? formatDateTime(value, mode) : (placeholder || (mode === 'date' ? 'Select date' : 'Select date and time'))}
-        </Text>
-        <Ionicons name="chevron-down" size={18} color="#999999" />
-      </TouchableOpacity>
+      {!isControlled && (
+        <TouchableOpacity style={styles.fieldButton} onPress={openPicker}>
+          <Ionicons name="calendar" size={20} color="#0078FF" />
+          <Text style={styles.fieldButtonText}>
+            {value ? formatDateTime(value, mode) : (placeholder || (mode === 'date' ? 'Select date' : 'Select date and time'))}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color="#999999" />
+        </TouchableOpacity>
+      )}
 
       {Platform.OS === 'web' && showWebOrIOSPicker && (
         <WebPicker
@@ -421,8 +454,8 @@ export default function DateTimeInput({ value, onChange, minimumDate, maximumDat
           minimumDate={minimumDate}
           maximumDate={maximumDate}
           mode={mode}
-          onConfirm={(result) => { onChange(result); setShowWebOrIOSPicker(false); }}
-          onClose={() => setShowWebOrIOSPicker(false)}
+          onConfirm={(result) => { onChange(result); closeWebOrIOSPicker(); }}
+          onClose={closeWebOrIOSPicker}
         />
       )}
 
@@ -432,8 +465,8 @@ export default function DateTimeInput({ value, onChange, minimumDate, maximumDat
           minimumDate={minimumDate}
           maximumDate={maximumDate}
           mode={mode}
-          onConfirm={(result) => { onChange(result); setShowWebOrIOSPicker(false); }}
-          onClose={() => setShowWebOrIOSPicker(false)}
+          onConfirm={(result) => { onChange(result); closeWebOrIOSPicker(); }}
+          onClose={closeWebOrIOSPicker}
         />
       )}
 
@@ -446,12 +479,13 @@ export default function DateTimeInput({ value, onChange, minimumDate, maximumDat
           maximumDate={maximumDate}
           onChange={(event, selectedDate) => {
             if (event.type === 'dismissed') {
-              setAndroidStep(null);
+              closeAndroid();
               return;
             }
             if (mode === 'date') {
               setAndroidStep(null);
               onChange(selectedDate);
+              if (isControlled) onRequestClose?.();
               return;
             }
             setAndroidDraftDate(selectedDate);
@@ -466,11 +500,15 @@ export default function DateTimeInput({ value, onChange, minimumDate, maximumDat
           mode="time"
           display="clock"
           onChange={(event, selectedTime) => {
+            if (event.type === 'dismissed' || !selectedTime) {
+              closeAndroid();
+              return;
+            }
             setAndroidStep(null);
-            if (event.type === 'dismissed' || !selectedTime) return;
             const combined = new Date(androidDraftDate);
             combined.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
             onChange(combined);
+            if (isControlled) onRequestClose?.();
           }}
         />
       )}
