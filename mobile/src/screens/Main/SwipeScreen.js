@@ -672,11 +672,11 @@ export default function SwipeScreen({ navigation }) {
         <View style={styles.filterButtonWrap}>
           <Animated.View
             pointerEvents="none"
-            style={[styles.filterCallout, { opacity: filterCalloutOpacity }]}
-          >
-            <Text style={styles.filterCalloutText}>Tap to filter</Text>
-            <View style={styles.filterCalloutArrow} />
-          </Animated.View>
+            style={[
+              styles.filterAttentionRing,
+              { opacity: filterCalloutOpacity, transform: [{ scale: filterPulse }] },
+            ]}
+          />
           <TouchableOpacity
             style={[styles.button]}
             onPress={() => (showFilterDrawer ? closeFilterDrawer() : openFilterDrawer())}
@@ -943,33 +943,17 @@ const styles = StyleSheet.create({
   },
   filterButtonWrap: {
     alignItems: 'center',
+    position: 'relative',
   },
-  filterCallout: {
+  filterAttentionRing: {
     position: 'absolute',
-    bottom: '100%',
-    marginBottom: 10,
-    backgroundColor: '#0078FF',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  filterCalloutText: {
-    color: 'white',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  filterCalloutArrow: {
-    position: 'absolute',
-    bottom: -6,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#0078FF',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: '#0078FF',
+    top: -7,
+    left: -7,
   },
 // NEW: Floating buttons container
   floatingButtonsContainer: {
