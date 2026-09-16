@@ -17,12 +17,13 @@
 //   scratch, in a modal styled to match the rest of the app - replacing
 //   what used to be a bare MM/DD/YYYY text mask with no real calendar
 //   and no time field.
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
+  ScrollView,
   StyleSheet,
   Platform,
 } from 'react-native';
@@ -112,6 +113,54 @@ function CalendarGrid({ visibleMonth, selectedDate, minimumDate, maximumDate, on
   );
 }
 
+// A scrollable grid of years, for jumping straight to e.g. a birth year
+// decades back instead of clicking the month arrow hundreds of times.
+// Opened by tapping the month/year title.
+function YearGrid({ selectedYear, minimumDate, maximumDate, onSelectYear }) {
+  const scrollRef = useRef(null);
+  const currentYear = new Date().getFullYear();
+  const rangeStart = minimumDate ? minimumDate.getFullYear() : currentYear - 100;
+  const rangeEnd = maximumDate ? maximumDate.getFullYear() : currentYear + 10;
+  const years = [];
+  for (let y = rangeStart; y <= rangeEnd; y++) years.push(y);
+
+  // Rows of 4, most recent first, so a birthday (near the end of the
+  // range) doesn't need much scrolling from the default open position.
+  const rows = [];
+  for (let i = years.length - 1; i >= 0; i -= 4) {
+    rows.push(years.slice(Math.max(0, i - 3), i + 1).reverse());
+  }
+  const selectedRowIndex = rows.findIndex(row => row.includes(selectedYear));
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.yearScroll}
+      onLayout={() => {
+        if (selectedRowIndex > 0) {
+          scrollRef.current?.scrollTo({ y: selectedRowIndex * 48, animated: false });
+        }
+      }}
+    >
+      {rows.map((row, i) => (
+        <View key={i} style={styles.yearRow}>
+          {row.map(year => (
+            <TouchableOpacity
+              key={year}
+              style={[styles.yearCell, year === selectedYear && styles.yearCellSelected]}
+              onPress={() => onSelectYear(year)}
+            >
+              <Text style={[styles.yearCellText, year === selectedYear && styles.yearCellTextSelected]}>
+                {year}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 // Hour (1-12) / minute (00/15/30/45) steppers plus an AM/PM toggle -
 // simpler and more reliable across web/touch than a scroll-snap wheel,
 // while still being a real, direct time input rather than free text.
@@ -190,6 +239,7 @@ function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
   const initial = value || new Date();
   const [visibleMonth, setVisibleMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(startOfDay(initial));
+  const [showYearGrid, setShowYearGrid] = useState(false);
   const { hour12: initialHour12, isPM: initialIsPM } = from24Hour(initial.getHours());
   const [time, setTime] = useState({
     hour12: initialHour12,
@@ -216,35 +266,63 @@ function WebPicker({ value, minimumDate, maximumDate, mode, onConfirm, onClose }
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <View style={styles.sheetHeader}>
-            <TouchableOpacity onPress={() => shiftMonth(-1)} style={styles.monthNavButton}>
-              <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+            <TouchableOpacity
+              onPress={() => shiftMonth(-1)}
+              style={styles.monthNavButton}
+              disabled={showYearGrid}
+            >
+              <Ionicons name="chevron-back" size={22} color={showYearGrid ? '#333333' : '#FFFFFF'} />
             </TouchableOpacity>
-            <Text style={styles.monthTitle}>
-              {MONTH_NAMES[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}
-            </Text>
-            <TouchableOpacity onPress={() => shiftMonth(1)} style={styles.monthNavButton}>
-              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+            <TouchableOpacity
+              style={styles.monthTitleButton}
+              onPress={() => setShowYearGrid(prev => !prev)}
+            >
+              <Text style={styles.monthTitle}>
+                {showYearGrid ? visibleMonth.getFullYear() : `${MONTH_NAMES[visibleMonth.getMonth()]} ${visibleMonth.getFullYear()}`}
+              </Text>
+              <Ionicons name={showYearGrid ? 'chevron-up' : 'chevron-down'} size={16} color="#999999" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => shiftMonth(1)}
+              style={styles.monthNavButton}
+              disabled={showYearGrid}
+            >
+              <Ionicons name="chevron-forward" size={22} color={showYearGrid ? '#333333' : '#FFFFFF'} />
             </TouchableOpacity>
           </View>
 
-          <CalendarGrid
-            visibleMonth={visibleMonth}
-            selectedDate={selectedDate}
-            minimumDate={minimumDate}
-            maximumDate={maximumDate}
-            onSelectDay={setSelectedDate}
-          />
-
-          {mode !== 'date' && (
+          {showYearGrid ? (
+            <YearGrid
+              selectedYear={visibleMonth.getFullYear()}
+              minimumDate={minimumDate}
+              maximumDate={maximumDate}
+              onSelectYear={(year) => {
+                setVisibleMonth(prev => new Date(year, prev.getMonth(), 1));
+                setShowYearGrid(false);
+              }}
+            />
+          ) : (
             <>
-              <View style={styles.divider} />
-              <Text style={styles.timeLabel}>Time</Text>
-              <TimeStepper
-                hour12={time.hour12}
-                minute={time.minute}
-                isPM={time.isPM}
-                onChange={setTime}
+              <CalendarGrid
+                visibleMonth={visibleMonth}
+                selectedDate={selectedDate}
+                minimumDate={minimumDate}
+                maximumDate={maximumDate}
+                onSelectDay={setSelectedDate}
               />
+
+              {mode !== 'date' && (
+                <>
+                  <View style={styles.divider} />
+                  <Text style={styles.timeLabel}>Time</Text>
+                  <TimeStepper
+                    hour12={time.hour12}
+                    minute={time.minute}
+                    isPM={time.isPM}
+                    onChange={setTime}
+                  />
+                </>
+              )}
             </>
           )}
 
@@ -435,10 +513,41 @@ const styles = StyleSheet.create({
   monthNavButton: {
     padding: 6,
   },
+  monthTitleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   monthTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  yearScroll: {
+    maxHeight: 240,
+  },
+  yearRow: {
+    flexDirection: 'row',
+  },
+  yearCell: {
+    flex: 1,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearCellSelected: {
+    backgroundColor: '#0078FF',
+    borderRadius: 8,
+  },
+  yearCellText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  yearCellTextSelected: {
+    fontWeight: '700',
   },
 
   weekdayRow: {
