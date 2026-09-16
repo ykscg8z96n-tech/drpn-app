@@ -155,13 +155,7 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
     if (event.type === 'event' && event.eventDate) {
       return formatDate(event.eventDate);
     } else if (event.type === 'group') {
-      const frequencyText = {
-        'weekly': 'Weekly',
-        'biweekly': 'Bi-weekly',
-        'monthly': 'Monthly',
-        'varies': 'Varies'
-      };
-      return frequencyText[event.meetingFrequency] || 'Ongoing';
+      return 'Ongoing';
     }
     return 'TBD';
   };
