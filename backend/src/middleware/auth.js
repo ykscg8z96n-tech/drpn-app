@@ -50,4 +50,15 @@ const premium = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, organizer, premium };
+// Private (1:1) chats are the app's highest-trust surface - no roster or
+// shared-event context to fall back on if someone abuses it - so they're
+// gated on the requester being verified. Event/group chats are unaffected.
+const requireVerified = async (req, res, next) => {
+  if (req.user && req.user.isVerified) {
+    next();
+  } else {
+    res.status(403).json({ success: false, message: 'Get verified from your Profile to use private chats' });
+  }
+};
+
+module.exports = { protect, organizer, premium, requireVerified };

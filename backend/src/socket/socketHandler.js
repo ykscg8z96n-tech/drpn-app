@@ -117,6 +117,14 @@ const handleConnection = (io) => {
           });
           if (participation) await participation.updateLastMessage();
         } else if (chatType === 'private') {
+          // Same gate as POST /messages - private chats need the sender
+          // verified, unlike event/group chats which have roster/shared-
+          // event context to fall back on.
+          if (!socket.user?.isVerified) {
+            socket.emit('message:error', { clientId, reason: 'Get verified from your Profile to use private chats' });
+            return;
+          }
+
           const connection = await getPrivateConnection(chatId, socket.userId);
           if (!connection) {
             socket.emit('message:error', { clientId, reason: 'Not authorized for this chat' });
