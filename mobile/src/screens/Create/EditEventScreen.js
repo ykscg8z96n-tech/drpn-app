@@ -759,6 +759,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#FFFFFF',
+    outlineStyle: 'none',
   },
   inputDisabled: {
     backgroundColor: '#0A0A0A',
