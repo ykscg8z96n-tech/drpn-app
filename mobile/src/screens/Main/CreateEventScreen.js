@@ -356,33 +356,17 @@ export default function CreateEventScreen({ navigation }) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    checkOrganizerStatus();
-  }, []);
-
   // Refetch whenever this screen regains focus (e.g. navigating back after
   // creating a new event/group) - otherwise the list only ever loads once
   // on mount and a newly created item silently doesn't appear until the
-  // next manual pull-to-refresh.
+  // next manual pull-to-refresh. This also covers the initial mount, so
+  // nothing else needs to call loadMyEvents() separately.
   useFocusEffect(
     useCallback(() => {
       loadMyEvents();
       loadPendingApplications();
     }, [])
   );
-
-  const checkOrganizerStatus = async () => {
-    try {
-      const response = await api.get('/users/profile');
-      if (!response.data.data.isOrganizer) {
-        await api.put('/users/profile', { isOrganizer: true });
-      }
-    } catch (error) {
-      console.error('Error checking organizer status:', error);
-    } finally {
-      loadMyEvents();
-    }
-  };
 
   const loadMyEvents = async () => {
     try {

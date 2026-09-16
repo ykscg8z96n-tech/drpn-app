@@ -619,12 +619,6 @@ router.post('/', [protect,
     console.log('💾 Creating event in database...');
     const event = await Event.create(eventData);
 
-    // Update user to organizer if not already
-    if (!req.user.isOrganizer) {
-      await User.findByIdAndUpdate(req.user.id, { isOrganizer: true });
-      console.log('👤 Updated user to organizer status');
-    }
-
     // Drop a clickable event-invite card into each invited group's chat
     // so members can see it and join with one tap (POST /:id/quick-join)
     // - group members join directly instead of applying like strangers.
