@@ -100,7 +100,7 @@ const getEventDisplayImage = (item) => {
 };
 
 // Swipeable Event Item Component - KEEPING ORIGINAL IMPLEMENTATION
-const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvite, onWithdraw, onViewDetails, onScrollEnabled, playHint, onHintPlayed }) => {
+const SwipeableEventItem = ({ item, onArchive, onStepDown, onEdit, onViewApplicants, onInvite, onWithdraw, onViewDetails, onScrollEnabled, playHint, onHintPlayed }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const [isRevealed, setIsRevealed] = useState(false);
 
@@ -222,13 +222,28 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                   <Text style={styles.actionButtonText}>Invite</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.archiveButton}
-                  onPress={() => onArchive(item)}
-                >
-                  <Ionicons name="close-circle-outline" size={24} color="white" />
-                  <Text style={styles.archiveButtonText}>Cancel</Text>
-                </TouchableOpacity>
+                {/* An organizer with another owner already promoted can
+                    hand off and leave in one step instead of cancelling
+                    the whole thing - a plain owner (not the organizer)
+                    only ever gets Cancel, since step-down is specifically
+                    the organizer-role handoff. */}
+                {item.role === 'organizer' && item.admins?.length > 0 ? (
+                  <TouchableOpacity
+                    style={styles.archiveButton}
+                    onPress={() => onStepDown(item)}
+                  >
+                    <Ionicons name="arrow-down-circle-outline" size={24} color="white" />
+                    <Text style={styles.archiveButtonText}>Step Down</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.archiveButton}
+                    onPress={() => onArchive(item)}
+                  >
+                    <Ionicons name="close-circle-outline" size={24} color="white" />
+                    <Text style={styles.archiveButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </>
@@ -485,6 +500,30 @@ export default function CreateEventScreen({ navigation }) {
     );
   };
 
+  const handleStepDown = (event) => {
+    const noun = event.type === 'group' ? 'group' : 'event';
+    Alert.alert(
+      'Step Down',
+      `Hand off "${event.name}" to an existing owner and leave? You won't be on the roster anymore.`,
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Step Down',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/organizer-step-down`);
+              setMyEvents(prev => prev.filter(e => e._id !== event._id));
+              Alert.alert('Success', `You stepped down and left the ${noun}`);
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || `Failed to step down`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleEditEvent = (event) => {
     navigation.navigate('EditEvent', { event });
   };
@@ -677,6 +716,7 @@ export default function CreateEventScreen({ navigation }) {
                 <SwipeableEventItem
                   item={item}
                   onArchive={handleArchiveEvent}
+                  onStepDown={handleStepDown}
                   onEdit={handleEditEvent}
                   onViewApplicants={handleViewApplicants}
                   onInvite={handleInvite}

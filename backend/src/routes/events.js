@@ -11,6 +11,7 @@ const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const { getBotUserId } = require('../services/botUser');
 const { getOrCreatePrivateConnection, postPrivateNotification, pushIfOffline, sendBotNotice } = require('../services/botNotice');
+const { cancelEventForRoster } = require('../services/eventLifecycle');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -961,36 +962,7 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    // Soft delete - archive instead of removing
-    await Event.findByIdAndUpdate(req.params.id, {
-      isActive: false,
-      isArchived: true,
-      archivedAt: new Date()
-    });
-
-    // A manual close (this route) always closes the downstream chat for
-    // the whole roster, unlike a natural date expiry which never touches
-    // Participation - that's what keeps a chat alive after its event just
-    // happens to run out the clock. Archiving each accepted member's
-    // Participation record both drops the event from their feed (the
-    // GET /participations query filters on it) and revokes their chat
-    // access (messages.js gates send/read the same way).
-    try {
-      const rosterIds = event.applicants
-        .filter(a => a.status === 'accepted' && a.userId.toString() !== req.user.id)
-        .map(a => a.userId);
-
-      await Participation.updateMany(
-        { event: event._id, participant: { $in: rosterIds } },
-        { isArchived: true }
-      );
-
-      const noun = event.type === 'group' ? 'group' : 'event';
-      const noticeText = `${req.user.name || 'The organizer'} has cancelled the ${noun} "${event.name}"`;
-      await Promise.all(rosterIds.map(userId => sendBotNotice(userId, noticeText, req)));
-    } catch (notifyError) {
-      console.error('⚠️ Failed to close roster chat access / send close notices:', notifyError);
-    }
+    await cancelEventForRoster(event, req.user.id, req.user.name, req);
 
     res.json({
       success: true,
@@ -1415,6 +1387,79 @@ router.post('/:id/step-down', protect, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error in step-down:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/organizer-step-down
+// @desc    The organizer hands off the role to an existing owner and
+//          leaves, in one step - unlike POST /:id/transfer-ownership,
+//          which needs the recipient's acceptance, this only works when
+//          there's already a promoted owner to hand straight to (that's
+//          the mobile client's cue for whether to show "Step Down" or
+//          "Cancel" on an event/group's manage row). With no owner to
+//          hand off to, the organizer's only option is cancelling it
+//          via DELETE /:id.
+// @access  Private
+router.post('/:id/organizer-step-down', protect, async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    if (event.organizer.toString() !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the organizer can step down this way' });
+    }
+    const remainingAdmins = event.admins.filter(id => id.toString() !== req.user.id);
+    if (remainingAdmins.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'There\'s no other owner to hand this off to - cancel it instead'
+      });
+    }
+
+    const previousOrganizerId = req.user.id;
+    const [newOrganizerId] = remainingAdmins;
+    event.organizer = newOrganizerId;
+    event.admins = remainingAdmins.filter(id => id.toString() !== newOrganizerId.toString());
+
+    // The organizer usually isn't on their own roster (they never applied
+    // to their own event) - this only does anything if an earlier
+    // ownership transfer left them with an applicants/roster entry.
+    const applicantIndex = event.applicants.findIndex(a => a.userId.toString() === previousOrganizerId);
+    let wasAccepted = false;
+    if (applicantIndex !== -1) {
+      wasAccepted = event.applicants[applicantIndex].status === 'accepted';
+      event.applicants.splice(applicantIndex, 1);
+      if (wasAccepted && event.type === 'event') {
+        event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+      }
+    }
+    await event.save();
+
+    const user = await User.findById(previousOrganizerId);
+    await User.findByIdAndUpdate(previousOrganizerId, { $pull: { eventsJoined: { eventId: event._id } } });
+    if (wasAccepted) {
+      await Match.deleteOne({ individual: previousOrganizerId, event: event._id });
+    }
+    await Participation.deleteOne({ event: event._id, participant: previousOrganizerId });
+    user.addSwipe(event._id, 'pass');
+    await user.save();
+
+    try {
+      const newOrganizer = await User.findById(newOrganizerId).select('name');
+      await postSystemAnnouncement(
+        event,
+        `${req.user.name || 'The organizer'} stepped down - ${newOrganizer?.name || 'an existing owner'} is now the organizer of "${event.name}".`,
+        req
+      );
+    } catch (announceError) {
+      console.error('⚠️ Failed to post organizer-step-down announcement:', announceError);
+    }
+
+    res.json({ success: true, message: 'Stepped down and left' });
+  } catch (error) {
+    console.error('Error in organizer-step-down:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
