@@ -570,6 +570,20 @@ export default function SwipeScreen({ navigation }) {
           >
             <Ionicons name="heart" size={18} color="#FFFFFF" />
           </Animated.View>
+          {cardAreaHeight === null ? (
+            // Don't render the card at all until swiperContainer's real
+            // height has actually been measured - rendering it early
+            // with the guessed CARD_HEIGHT fallback is exactly the "short
+            // card that grows once you swipe" bug: onLayout's first call
+            // lands slightly after this first paint, so a card sized off
+            // the fallback shows briefly, then jumps to the real size on
+            // the next layout pass a swipe happens to trigger. Waiting
+            // for a real measurement first means the card is never wrong
+            // for even one frame.
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#0078FF" />
+            </View>
+          ) : (
           <Swiper
             ref={swiperRef}
             cards={events}
@@ -678,6 +692,7 @@ export default function SwipeScreen({ navigation }) {
               },
             }}
           />
+          )}
         </Animated.View>
 
       {/* Floating Action Buttons */}
