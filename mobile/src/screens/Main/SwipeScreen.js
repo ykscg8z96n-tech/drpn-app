@@ -946,7 +946,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#121212',
     marginTop: 8,
-    marginBottom: 10, // Add bottom margin for button clearance
+    // floatingButtonsContainer (the pass/like/filter row) is
+    // position:absolute/bottom:0 - it floats ON TOP of this flex box
+    // rather than reserving its own space below it, so this margin is
+    // the ONLY thing stopping swiperContainer's flex height (and
+    // anything measuring it, like the card-height onLayout fix) from
+    // extending straight through the area the button row actually
+    // occupies. The previous 10px was nowhere near that row's real
+    // height (60px tallest button + 12px vertical padding = 72px) -
+    // rounded up to 80 for a little breathing room above the buttons.
+    marginBottom: 80,
   },
   swipeHintBadgeLeft: {
     position: 'absolute',
