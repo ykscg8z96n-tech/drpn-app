@@ -39,7 +39,20 @@ router.get('/search', protect, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(query)}`;
+    let url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(query)}`;
+
+    // Optional soft bias toward wherever the caller already is (their
+    // device location, or profile/browse location) - a viewbox without
+    // bounded=1 nudges Nominatim to prefer results inside it without
+    // excluding everything else, so a real address further away still
+    // comes back if that's genuinely what was typed.
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      const delta = 2; // ~degrees, a soft "nearby" box, not a hard radius
+      const viewbox = [lon - delta, lat + delta, lon + delta, lat - delta].join(',');
+      url += `&viewbox=${viewbox}`;
+    }
     const response = await throttledFetch(url);
     if (!response.ok) {
       return res.status(502).json({ success: false, message: 'Geocoding service unavailable' });

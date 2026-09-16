@@ -750,6 +750,11 @@ export default function ProfileScreen({ navigation }) {
                     setTempLocationText(place.address);
                     setTempLocationPlace(place);
                   }}
+                  showIcon={false}
+                  biasLocation={profile?.location?.coordinates ? {
+                    latitude: profile.location.coordinates[1],
+                    longitude: profile.location.coordinates[0],
+                  } : null}
                 />
               ) : (
                 <Text style={styles.fieldValue}>{profile?.location?.address || 'Add location'}</Text>

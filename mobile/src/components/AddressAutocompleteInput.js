@@ -8,7 +8,7 @@ import api from '../services/api';
 // (Nominatim). Picking a suggestion fills in city/state/coordinates for
 // the event; typing without picking one still works exactly like before
 // (onChangeText fallback), it just won't have real coordinates attached.
-export default function AddressAutocompleteInput({ value, onChangeText, onSelectPlace, placeholder }) {
+export default function AddressAutocompleteInput({ value, onChangeText, onSelectPlace, placeholder, biasLocation, showIcon = true }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -23,7 +23,12 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await api.get('/geocode/search', { params: { q: text } });
+        const params = { q: text };
+        if (biasLocation?.latitude != null && biasLocation?.longitude != null) {
+          params.lat = biasLocation.latitude;
+          params.lon = biasLocation.longitude;
+        }
+        const response = await api.get('/geocode/search', { params });
         setSuggestions(response.data.data || []);
       } catch (error) {
         setSuggestions([]);
@@ -31,7 +36,7 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
         setLoading(false);
       }
     }, 400);
-  }, []);
+  }, [biasLocation?.latitude, biasLocation?.longitude]);
 
   const handleChangeText = (text) => {
     onChangeText(text);
@@ -48,7 +53,7 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
   return (
     <View style={styles.wrapper}>
       <View style={styles.addressInputContainer}>
-        <Ionicons name="location-outline" size={20} color="#0078FF" />
+        {showIcon && <Ionicons name="location-outline" size={20} color="#666666" />}
         <TextInput
           style={styles.addressInput}
           value={value}
@@ -98,6 +103,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     paddingVertical: 12,
+    outlineStyle: 'none',
   },
   suggestionsList: {
     backgroundColor: '#1A1A1A',

@@ -399,6 +399,7 @@ export default function EditEventScreen({ route, navigation }) {
             <AddressAutocompleteInput
               value={formData.location.fullAddress || formData.location.address}
               placeholder="Enter full address (e.g., 123 Main St, Toronto, ON)"
+              biasLocation={location?.coords ? { latitude: location.coords.latitude, longitude: location.coords.longitude } : null}
               onChangeText={(text) => {
                 // Manual typing without picking a suggestion - keep the old
                 // best-effort city/state parse as a fallback so submitting
