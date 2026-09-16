@@ -624,13 +624,28 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>My basics</Text>
         
         {/* Name Field */}
-        <View style={styles.fieldSection}>
-          <View style={styles.fieldHeader}>
+        <View style={styles.editableInfoItem}>
+          <View style={styles.infoRow}>
             <Ionicons name="person-outline" size={20} color="#666666" />
-            <Text style={styles.infoLabel}>Name</Text>
+            <View style={styles.inputContainer}>
+              {editingName ? (
+                <TextInput
+                  style={styles.editableInput}
+                  value={tempName}
+                  onChangeText={setTempName}
+                  placeholder="Enter your name"
+                  placeholderTextColor="#666666"
+                  autoFocus
+                />
+              ) : (
+                <Text style={styles.fieldValue}>{profile?.name || 'Add name'}</Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.editButtonContainer}>
             {editingName ? (
-              <TouchableOpacity style={styles.editButton} onPress={saveNameChanges}>
-                <Text style={styles.editButtonText}>Save</Text>
+              <TouchableOpacity style={styles.saveButton} onPress={saveNameChanges}>
+                <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.editButton} onPress={startEditingName}>
@@ -638,65 +653,35 @@ export default function ProfileScreen({ navigation }) {
               </TouchableOpacity>
             )}
           </View>
-          {editingName ? (
-            <TextInput
-              style={styles.fieldBox}
-              value={tempName}
-              onChangeText={setTempName}
-              placeholder="Enter your name"
-              placeholderTextColor="#666666"
-              autoFocus
-            />
-          ) : (
-            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>{profile?.name || 'Add name'}</Text>
-          )}
         </View>
 
         {/* Birthday Field */}
-        <View style={styles.fieldSection}>
-          <View style={styles.fieldHeader}>
+        <View style={styles.editableInfoItem}>
+          <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color="#666666" />
-            <Text style={styles.infoLabel}>Birthday</Text>
-            {editingBirthday ? (
-              <View style={styles.editButtonContainer}>
-                <TouchableOpacity style={styles.cancelButton} onPress={cancelBirthdayEdit}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
-              >
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {editingBirthday ? (
-            Platform.OS === 'web' ? (
-              <WebDateInput
-                value={tempBirthday}
-                onChange={setTempBirthday}
-                style={styles.fieldBox}
-              />
-            ) : (
-              <TextInput
-                style={styles.fieldBox}
-                value={tempBirthday}
-                onChangeText={setTempBirthday}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#666666"
-                autoFocus
-              />
-            )
-          ) : (
-            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>
-              {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
-            </Text>
-          )}
+            <View style={styles.inputContainer}>
+              {editingBirthday ? (
+                Platform.OS === 'web' ? (
+                  <WebDateInput
+                    value={tempBirthday}
+                    onChange={setTempBirthday}
+                  />
+                ) : (
+                  <TextInput
+                    style={styles.fieldValue}
+                    value={tempBirthday}
+                    onChangeText={setTempBirthday}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#666666"
+                    autoFocus
+                  />
+                )
+              ) : (
+                <Text style={styles.fieldValue}>
+                  {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
+                </Text>
+              )}
+            </View>
 
           {/* @react-native-community/datetimepicker has no web implementation
               (no .web.js entry in the package - it silently does nothing when
@@ -730,15 +715,52 @@ export default function ProfileScreen({ navigation }) {
           )}
         </View>
 
+         <View style={styles.editButtonContainer}>
+            {editingBirthday ? (
+              <>
+                <TouchableOpacity style={styles.editButton} onPress={cancelBirthdayEdit}>
+                  <Text style={styles.editButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
         {/* Location Field */}
-        <View style={styles.fieldSection}>
-          <View style={styles.fieldHeader}>
+        <View style={styles.editableInfoItem}>
+          <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={20} color="#666666" />
-            <Text style={styles.infoLabel}>Location</Text>
+            <View style={styles.inputContainer}>
+              {editingLocation ? (
+                <AddressAutocompleteInput
+                  value={tempLocationText}
+                  placeholder="Search a city or address"
+                  onChangeText={setTempLocationText}
+                  onSelectPlace={(place) => {
+                    setTempLocationText(place.address);
+                    setTempLocationPlace(place);
+                  }}
+                />
+              ) : (
+                <Text style={styles.fieldValue}>{profile?.location?.address || 'Add location'}</Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.editButtonContainer}>
             {editingLocation ? (
-              <View style={styles.editButtonContainer}>
-                <TouchableOpacity style={styles.cancelButton} onPress={cancelLocationEdit}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+              <>
+                <TouchableOpacity style={styles.editButton} onPress={cancelLocationEdit}>
+                  <Text style={styles.editButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.saveButton} onPress={saveLocationChanges} disabled={savingLocation}>
                   {savingLocation ? (
@@ -747,28 +769,13 @@ export default function ProfileScreen({ navigation }) {
                     <Text style={styles.saveButtonText}>Save</Text>
                   )}
                 </TouchableOpacity>
-              </View>
+              </>
             ) : (
               <TouchableOpacity style={styles.editButton} onPress={startEditingLocation}>
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
-          {editingLocation ? (
-            <AddressAutocompleteInput
-              value={tempLocationText}
-              placeholder="Search a city or address"
-              onChangeText={setTempLocationText}
-              onSelectPlace={(place) => {
-                setTempLocationText(place.address);
-                setTempLocationPlace(place);
-              }}
-            />
-          ) : (
-            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>
-              {profile?.location?.address || 'Add location'}
-            </Text>
-          )}
         </View>
 
         {/* About - Multi-line input */}
@@ -1387,35 +1394,8 @@ const styles = StyleSheet.create({
     marginLeft: 32, // Align with text after icon
   },
   aboutInputDisabled: {
-    color: '#999999',
-  },
-
-  // Shared "field card" look used by Name/Birthday/Location, matching
-  // the About section's boxed style so every editable field on this
-  // screen looks the same whether it's being edited or not.
-  fieldSection: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
-  },
-  fieldHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 0,
-  },
-  fieldBox: {
-    borderWidth: 1,
-    borderColor: '#333333',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginLeft: 32,
-  },
-  fieldBoxDisabled: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
     color: '#999999',
   },
 
