@@ -128,9 +128,19 @@ const MatchItem = ({ item, onPress }) => {
                 </View>
               )}
               
-              <Text style={styles.matchName} numberOfLines={1}>
-                {item.name}
-              </Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.matchName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {(item.role === 'organizer' || item.role === 'owner') && (
+                  <View style={styles.roleBadge}>
+                    <Ionicons name="star" size={10} color="#FFD700" />
+                    <Text style={styles.roleBadgeText}>
+                      {item.role === 'organizer' ? 'Organizer' : 'Owner'}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Right Section - Time and participant count */}
@@ -226,7 +236,10 @@ export default function MatchesScreen({ navigation, route }) {
               lastMessage: item.lastMessage?.text || 'Chat started!',
               lastMessageTime: item.lastMessage?.createdAt || item.joinedAt,
               unreadCount: item.unreadCount || 0,
-              participantCount: event.currentAttendees || event.currentMembers
+              participantCount: event.currentAttendees || event.currentMembers,
+              // 'organizer' or 'owner' (a promoted admin) - see
+              // GET /participations, which sets this same field.
+              role: item.userRole
             };
           }
         });
@@ -573,11 +586,31 @@ const styles = StyleSheet.create({
   },
   
   // Match Name
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   matchName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
     lineHeight: 20,
+    flexShrink: 1,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFD700',
   },
   
   // Right Section - Time and participant count

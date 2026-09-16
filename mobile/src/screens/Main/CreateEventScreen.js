@@ -292,6 +292,14 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                   <Text style={styles.eventItemName} numberOfLines={2}>
                     {item.name}
                   </Text>
+                  {item.role && (
+                    <View style={styles.roleBadge}>
+                      <Ionicons name="star" size={10} color="#FFD700" />
+                      <Text style={styles.roleBadgeText}>
+                        {item.role === 'organizer' ? 'Organizer' : 'Owner'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Right Section - Date and Location (in content row) */}
@@ -404,15 +412,18 @@ export default function CreateEventScreen({ navigation }) {
       const response = await api.get('/participations');
       const events = (response.data.data || [])
         .filter(item => item.event && !item.event.isArchived)
-        .map(item => ({
-          ...item.event,
-          // An owner (promoted, not just the organizer) gets the same
-          // manage capabilities - Edit/Archive/Invite on the swipe row.
-          isMyEvent: item.userRole === 'organizer'
-            || item.userRole === 'owner'
-            || item.event.organizer?._id === user?.id
-            || item.event.organizer === user?.id
-        }));
+        .map(item => {
+          const isDirectOrganizer = item.event.organizer?._id === user?.id || item.event.organizer === user?.id;
+          return {
+            ...item.event,
+            // An owner (promoted, not just the organizer) gets the same
+            // manage capabilities - Edit/Archive/Invite on the swipe row.
+            isMyEvent: item.userRole === 'organizer'
+              || item.userRole === 'owner'
+              || isDirectOrganizer,
+            role: item.userRole === 'owner' ? 'owner' : (item.userRole === 'organizer' || isDirectOrganizer) ? 'organizer' : null
+          };
+        });
 
       setMyEvents(events);
     } catch (error) {
@@ -1024,6 +1035,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     lineHeight: 20,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFD700',
   },
 
   // Empty State
