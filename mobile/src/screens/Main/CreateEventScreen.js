@@ -375,31 +375,12 @@ export default function CreateEventScreen({ navigation }) {
     try {
       const response = await api.get('/users/profile');
       if (!response.data.data.isOrganizer) {
-        Alert.alert(
-          'Become an Organizer',
-          'You need to be an organizer to create events. Would you like to become one?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Yes', onPress: becomeOrganizer }
-          ]
-        );
-      } else {
-        loadMyEvents();
+        await api.put('/users/profile', { isOrganizer: true });
       }
     } catch (error) {
       console.error('Error checking organizer status:', error);
+    } finally {
       loadMyEvents();
-    }
-  };
-
-  const becomeOrganizer = async () => {
-    try {
-      await api.put('/users/profile', { isOrganizer: true });
-      Alert.alert('Success', 'You are now an organizer!');
-      loadMyEvents();
-    } catch (error) {
-      console.error('Error becoming organizer:', error);
-      Alert.alert('Error', 'Failed to become organizer. Please try again.');
     }
   };
 
