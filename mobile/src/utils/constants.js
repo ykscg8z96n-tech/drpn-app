@@ -5,7 +5,7 @@ const PROD_API_URL = 'https://drpn-backend.onrender.com/api';
 // Standalone demo mode: intercepts all API calls with fixture data, no
 // live backend required. Set to false to hit a real API (PROD_API_URL /
 // SOCKET_URL below, now pointed at the live Render deployment).
-export const USE_MOCK_API = true;
+export const USE_MOCK_API = false;
 
 export default {
   API_URL: __DEV__ ? DEV_API_URL : PROD_API_URL,
