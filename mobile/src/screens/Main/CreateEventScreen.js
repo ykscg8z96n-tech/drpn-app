@@ -516,7 +516,12 @@ export default function CreateEventScreen({ navigation }) {
       const joinLink = Platform.OS === 'web'
         ? `${window.location.origin}/join/${inviteCode}`
         : `https://drpn.app/join/${inviteCode}`;
-      const message = `Join my ${label} "${eventOrGroup.name}" on DRPN! Code: ${inviteCode}\n${joinLink}`;
+      // Share.share's separate `url` field already puts the link (and its
+      // own rich preview) into the share - repeating it inside `message`
+      // as well made Messages show the same link/preview twice, once from
+      // each field. The clipboard fallback below has no separate `url`
+      // slot, so that one still needs the link spelled out in the text.
+      const shareMessage = `Join my ${label} "${eventOrGroup.name}" on DRPN! Code: ${inviteCode}`;
 
       // navigator.share isn't available on most desktop browsers - check
       // up front rather than relying on Share.share's rejection, since
@@ -524,14 +529,14 @@ export default function CreateEventScreen({ navigation }) {
       // native share sheet and shouldn't be treated as "unsupported".
       if (Platform.OS === 'web' && !navigator.share) {
         if (navigator.clipboard) {
-          await navigator.clipboard.writeText(message);
+          await navigator.clipboard.writeText(`${shareMessage}\n${joinLink}`);
           Alert.alert('Copied!', 'Invite link copied to your clipboard - paste it wherever you want to share it.');
         }
         return;
       }
 
       try {
-        await Share.share({ message, url: joinLink, title: `Join ${eventOrGroup.name}` });
+        await Share.share({ message: shareMessage, url: joinLink, title: `Join ${eventOrGroup.name}` });
       } catch (shareError) {
         // Cancelling the share sheet rejects the same way a real failure
         // would (e.g. AbortError on web) - nothing went wrong, so don't
