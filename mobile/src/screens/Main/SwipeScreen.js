@@ -44,6 +44,15 @@ export default function SwipeScreen({ navigation }) {
   const [cardIndex, setCardIndex] = useState(0);
   const [userLocation, setUserLocation] = useState(null);
   const [cardExpanded, setCardExpanded] = useState(false);
+  // Measured directly from the actual rendered area instead of guessed
+  // from Dimensions.get('window') minus estimated chrome heights - the
+  // Swiper library's own outer wrapper is position:absolute covering
+  // whatever box its nearest positioned ancestor (this screen's
+  // swiperContainer) actually renders at, so that's the real number to
+  // size the card against rather than repeatedly guessing offsets.
+  const [cardAreaHeight, setCardAreaHeight] = useState(null);
+  const CARD_AREA_PADDING = 8;
+  const computedCardHeight = cardAreaHeight ? cardAreaHeight - CARD_AREA_PADDING * 2 : CARD_HEIGHT;
   const swiperRef = useRef(null);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -526,6 +535,7 @@ export default function SwipeScreen({ navigation }) {
           </TouchableOpacity>
         )}
         <Animated.View
+          onLayout={(e) => setCardAreaHeight(e.nativeEvent.layout.height)}
           style={[
             styles.swiperContainer,
             {
@@ -556,30 +566,32 @@ export default function SwipeScreen({ navigation }) {
           <Swiper
             ref={swiperRef}
             cards={events}
-            renderCard={(event) => <EventCard event={event} onExpandChange={setCardExpanded} />}
+            renderCard={(event) => (
+              <EventCard event={event} onExpandChange={setCardExpanded} cardHeight={computedCardHeight} />
+            )}
             onSwiped={onSwiped}
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
-            // The real bug behind every earlier attempt at this: the
-            // Swiper library sizes its own card wrapper from raw window
-            // dimensions via cardVerticalMargin/cardHorizontalMargin/
-            // marginTop/marginBottom, but EventCard (the thing actually
-            // rendered inside it) sizes ITSELF via its own fixed
-            // CARD_HEIGHT constant, completely ignoring whatever box
-            // the Swiper gives it. Resizing the Swiper's side alone
-            // just changed how much empty space surrounded an
-            // unchanged-size EventCard - never the visible card itself.
-            // cardStyle (merged in last, after the library's own
-            // computed style) now pins the Swiper's box to the exact
-            // same CARD_HEIGHT EventCard uses for its own size, so the
-            // two can't drift apart into a gap on either side again.
-            // cardHorizontalMargin stays at its default (20) - a
-            // previous override threw off horizontal centering, since
-            // this container isn't full-bleed edge-to-edge like the
-            // library assumes.
-            cardVerticalMargin={20}
-            cardStyle={{ height: CARD_HEIGHT }}
+            // Every earlier attempt at sizing this card guessed offsets
+            // from Dimensions.get('window') - both the Swiper library's
+            // own card math and EventCard's fixed CARD_HEIGHT constant
+            // worked that way, and repeatedly guessing new fudge
+            // factors on top of a guess never converged. This measures
+            // the Swiper's actual rendered box directly (onLayout on
+            // swiperContainer, its nearest positioned ancestor, since
+            // the library's own outer wrapper is
+            // position:absolute/top:0/bottom:0 filling whatever that
+            // is) and sizes both the Swiper's cardStyle and EventCard's
+            // own height from that one real, measured number instead -
+            // no more estimating. cardVerticalMargin is now just the
+            // small breathing-room padding within that measured box,
+            // not a card-sizing input. cardHorizontalMargin stays at
+            // its default (20) - a previous override threw off
+            // horizontal centering, since this container isn't
+            // full-bleed edge-to-edge like the library assumes.
+            cardVerticalMargin={CARD_AREA_PADDING}
+            cardStyle={{ height: computedCardHeight }}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
