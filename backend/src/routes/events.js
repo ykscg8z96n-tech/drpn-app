@@ -1393,13 +1393,16 @@ router.post('/:id/step-down', protect, async (req, res) => {
 
 // @route   POST /api/events/:id/organizer-step-down
 // @desc    The organizer hands off the role to an existing owner and
-//          leaves, in one step - unlike POST /:id/transfer-ownership,
-//          which needs the recipient's acceptance, this only works when
-//          there's already a promoted owner to hand straight to (that's
-//          the mobile client's cue for whether to show "Step Down" or
-//          "Cancel" on an event/group's manage row). With no owner to
-//          hand off to, the organizer's only option is cancelling it
-//          via DELETE /:id.
+//          becomes a plain roster member (not removed - see
+//          accept-transfer-ownership, which does the same "outgoing
+//          organizer becomes a member" for the accept-required transfer
+//          flow). Unlike POST /:id/transfer-ownership, this only works
+//          when there's already a promoted owner to hand straight to
+//          (that's the mobile client's cue for whether to show "Step
+//          Down" or "Cancel" on an event/group's manage row) - no
+//          acceptance is needed since they're already trusted. With no
+//          owner to hand off to, the organizer's only option is
+//          cancelling it via DELETE /:id.
 // @access  Private
 router.post('/:id/organizer-step-down', protect, async (req, res) => {
   try {
@@ -1424,27 +1427,37 @@ router.post('/:id/organizer-step-down', protect, async (req, res) => {
     event.admins = remainingAdmins.filter(id => id.toString() !== newOrganizerId.toString());
 
     // The organizer usually isn't on their own roster (they never applied
-    // to their own event) - this only does anything if an earlier
-    // ownership transfer left them with an applicants/roster entry.
-    const applicantIndex = event.applicants.findIndex(a => a.userId.toString() === previousOrganizerId);
-    let wasAccepted = false;
-    if (applicantIndex !== -1) {
-      wasAccepted = event.applicants[applicantIndex].status === 'accepted';
-      event.applicants.splice(applicantIndex, 1);
-      if (wasAccepted && event.type === 'event') {
-        event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+    // to their own event) - add them as an accepted member now instead of
+    // leaving them with no roster entry at all.
+    if (!event.applicants.some(a => a.userId.toString() === previousOrganizerId)) {
+      event.applicants.push({
+        userId: previousOrganizerId,
+        status: 'accepted',
+        appliedAt: new Date(),
+        respondedAt: new Date()
+      });
+      if (event.type === 'event') {
+        event.currentAttendees = (event.currentAttendees || 0) + 1;
       }
     }
     await event.save();
 
-    const user = await User.findById(previousOrganizerId);
-    await User.findByIdAndUpdate(previousOrganizerId, { $pull: { eventsJoined: { eventId: event._id } } });
-    if (wasAccepted) {
-      await Match.deleteOne({ individual: previousOrganizerId, event: event._id });
+    const existingParticipation = await Participation.findOne({ event: event._id, participant: previousOrganizerId });
+    if (!existingParticipation) {
+      await Participation.create({
+        event: event._id,
+        participant: previousOrganizerId,
+        status: 'accepted',
+        joinMethod: 'ownership_transfer',
+        acceptedBy: newOrganizerId,
+        acceptedAt: new Date(),
+        isArchived: false
+      });
+    } else if (existingParticipation.isArchived) {
+      existingParticipation.isArchived = false;
+      existingParticipation.status = 'accepted';
+      await existingParticipation.save();
     }
-    await Participation.deleteOne({ event: event._id, participant: previousOrganizerId });
-    user.addSwipe(event._id, 'pass');
-    await user.save();
 
     try {
       const newOrganizer = await User.findById(newOrganizerId).select('name');
@@ -1457,7 +1470,7 @@ router.post('/:id/organizer-step-down', protect, async (req, res) => {
       console.error('⚠️ Failed to post organizer-step-down announcement:', announceError);
     }
 
-    res.json({ success: true, message: 'Stepped down and left' });
+    res.json({ success: true, message: 'Stepped down - you\'re now a member' });
   } catch (error) {
     console.error('Error in organizer-step-down:', error);
     res.status(500).json({ success: false, message: 'Server error' });
