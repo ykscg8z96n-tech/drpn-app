@@ -11,9 +11,35 @@ const Message = require('../models/Message');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { getBotUserId } = require('../services/botUser');
+const { getOrCreatePrivateConnection, sendWelcomeMessage } = require('../services/botNotice');
 
 // No need for category validation since users don't have preferred categories
 // const VALID_CATEGORIES = ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'];
+
+// @route   GET /api/users/bot-chat
+// @desc    Ensure the welcome message has been sent and return the
+//          connection/bot info needed to open that thread directly (e.g.
+//          right after signup, before the user has ever opened Chats).
+// @access  Private
+router.get('/bot-chat', protect, async (req, res) => {
+  try {
+    const botId = await getBotUserId();
+    await sendWelcomeMessage(req.user.id, req);
+    const connection = await getOrCreatePrivateConnection(botId, req.user.id, null);
+    const bot = await User.findById(botId).select('name photos');
+
+    res.json({
+      success: true,
+      data: {
+        connectionId: connection._id,
+        bot: { _id: bot._id, name: bot.name, photos: bot.photos }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error getting bot chat:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 // @route   GET /api/users/profile
 // @desc    Get current user profile

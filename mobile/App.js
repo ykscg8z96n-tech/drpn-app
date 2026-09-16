@@ -57,7 +57,7 @@ const linking = {
 };
 
 function RootNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, pendingWelcomeChat } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   
   useEffect(() => {
@@ -105,7 +105,15 @@ function RootNavigator() {
     <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
-          <Stack.Screen name="Main" component={MainNavigator} />
+          <Stack.Screen
+            name="Main"
+            component={MainNavigator}
+            // Only read at the moment this screen first mounts (right
+            // after a fresh signUp() sets `user`) - a returning user who
+            // was already signed in has pendingWelcomeChat as null, so
+            // this has no effect for them.
+            initialParams={pendingWelcomeChat ? { welcomeChat: pendingWelcomeChat } : undefined}
+          />
         ) : (
           <Stack.Screen name="Auth" component={AuthNavigator} />
         )}
