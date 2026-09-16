@@ -25,9 +25,9 @@ const { width } = Dimensions.get('window');
 const UserItem = ({
   user,
   isPending = false,
-  isOrganizer = false,
   isSelf = false,
   isTargetOwner = false,
+  isSoleOwner = false,
   canManage = false,
   onAccept,
   onReject,
@@ -87,16 +87,14 @@ const UserItem = ({
           <View style={styles.contentRow}>
             <View style={styles.nameSection}>
               <Text style={styles.userName}>{user.name}</Text>
-              {user.isEventOrganizer ? (
-                <Text style={styles.organizerLabel}>Organizer</Text>
-              ) : isTargetOwner && (
+              {isTargetOwner && (
                 <Text style={styles.organizerLabel}>Owner</Text>
               )}
             </View>
 
             {/* Right Section - Actions */}
             <View style={styles.rightSection}>
-              {isPending && isOrganizer ? (
+              {isPending && canManage ? (
                 <View style={styles.pendingActions}>
                   <TouchableOpacity
                     style={styles.rejectButton}
@@ -114,12 +112,12 @@ const UserItem = ({
               ) : (
                 <View style={styles.rowActions}>
                   {isSelf ? (
-                    /* The organizer can't leave at all (has to transfer
-                       ownership first) or step down (there'd be no
-                       organizer left) - everyone else gets Leave, and an
-                       owner also gets Step Down for giving up just the
-                       owner role while staying on the roster. */
-                    !user.isEventOrganizer && (
+                    /* Every owner has identical rights - the only one who
+                       can't step down or leave is the sole remaining
+                       owner, since there'd be no one left to manage it.
+                       They have to cancel it or promote someone else
+                       first. */
+                    !isSoleOwner && (
                       <>
                         {isTargetOwner && (
                           <TouchableOpacity style={styles.stepDownButton} onPress={onStepDown}>
@@ -190,19 +188,16 @@ export default function PendingApplicationsScreen({ route, navigation }) {
   // Sourced from the fresh GET /events/:id fetch in loadUsers, not the
   // route param `event` (which only carries whatever the list screen it
   // came from populated, and never admins).
-  const [organizerId, setOrganizerId] = useState(
-    event.organizer?._id || event.organizer
-  );
   const [adminIds, setAdminIds] = useState([]);
   const [actionMenuUser, setActionMenuUser] = useState(null);
 
   const handleViewProfile = (userData) => setViewingProfile(userData);
 
-  // Check if current user is organizer of this event
-  const isOrganizer = organizerId === user?.id || organizerId?.toString?.() === user?.id;
-  // Organizer or a promoted owner - both can manage the roster.
-  const canManage = isOrganizer || adminIds.includes(user?.id);
-  const isOwner = (userId) => userId === organizerId || adminIds.includes(userId);
+  // Every owner has identical rights - there's no more-powerful
+  // "organizer" tier for a regular event/group.
+  const canManage = adminIds.includes(user?.id);
+  const isOwner = (userId) => adminIds.includes(userId);
+  const isSoleOwner = adminIds.length === 1 && adminIds[0] === user?.id;
 
   useEffect(() => {
     loadUsers();
@@ -213,9 +208,7 @@ export default function PendingApplicationsScreen({ route, navigation }) {
       setLoading(true);
       console.log('🔍 Loading users for event:', event._id);
       console.log('👤 Current user:', user?.id);
-      console.log('🏢 Event organizer:', event.organizer);
-      console.log('🎯 Is organizer:', isOrganizer);
-      
+
       // Get event details with applicants
       const response = await api.get(`/events/${event._id}`);
       
@@ -243,26 +236,25 @@ export default function PendingApplicationsScreen({ route, navigation }) {
             applicationId: app._id
           }));
         
-        // Add organizer to accepted users (if not already there). Uses
-        // eventData.organizer - the just-fetched, fully populated one
-        // (name/photos/bio/age) - not the route param `event` prop, which
-        // only ever carries whatever the list screen it came from
-        // populated (name/photos), so bio/age were always blank here
-        // even for a full profile.
-        const freshOrganizerId = eventData.organizer?._id || eventData.organizer;
-        const freshAdminIds = (eventData.admins || []).map(a => a._id || a);
-        const organizerInAccepted = accepted.find(u => u._id === freshOrganizerId);
-        if (!organizerInAccepted && eventData.organizer) {
-          accepted.unshift({
-            ...eventData.organizer,
-            isEventOrganizer: true
-          });
-        }
+        // Add any owner who isn't already a roster/applicants entry (the
+        // creator never had to apply to their own event/group, so they'd
+        // otherwise be invisible here). Uses eventData.admins - the
+        // just-fetched, fully populated list (name/photos/bio/age) - not
+        // the route param `event` prop, which only ever carries whatever
+        // the list screen it came from populated (name/photos), so
+        // bio/age were always blank here even for a full profile.
+        const freshAdmins = eventData.admins || [];
+        const freshAdminIds = freshAdmins.map(a => a._id || a);
+        freshAdmins.forEach(admin => {
+          const adminId = admin._id || admin;
+          if (!accepted.find(u => u._id === adminId)) {
+            accepted.unshift(admin);
+          }
+        });
 
         console.log('👥 Pending users:', pending.length);
         console.log('✅ Accepted users:', accepted.length);
 
-        setOrganizerId(freshOrganizerId);
         setAdminIds(freshAdminIds);
         setPendingUsers(pending);
         setAcceptedUsers(accepted);
@@ -453,27 +445,6 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     );
   };
 
-  const handleTransferOwnership = (userData) => {
-    Alert.alert(
-      'Transfer Ownership',
-      `Send ${userData.name} a request to become the organizer of "${event.name}"? You'll be added as an owner once they accept, and they'll have full organizer control.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Request',
-          onPress: async () => {
-            try {
-              await api.post(`/events/${event._id}/transfer-ownership`, { userId: userData._id });
-              Alert.alert('Sent', `Transfer request sent to ${userData.name}.`);
-            } catch (error) {
-              Alert.alert('Error', error.response?.data?.message || 'Failed to send transfer request');
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const handleKick = (userData) => {
     Alert.alert(
       'Remove from Roster',
@@ -512,7 +483,7 @@ export default function PendingApplicationsScreen({ route, navigation }) {
       <View style={styles.header}>
         <Text style={styles.title}>{event.name}</Text>
         <Text style={styles.subtitle}>
-          {isOrganizer ? 'Participant' : 'I participant'} • {pendingUsers.length > 0 ? `${pendingUsers.length} pending` : 'No pending'}
+          {canManage ? 'Owner' : 'Participant'} • {pendingUsers.length > 0 ? `${pendingUsers.length} pending` : 'No pending'}
         </Text>
       </View>
 
@@ -542,7 +513,7 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 key={userData._id}
                 user={userData}
                 isPending={true}
-                isOrganizer={canManage}
+                canManage={canManage}
                 isSelf={userData._id === user?.id}
                 onAccept={handleAcceptUser}
                 onReject={handleRejectUser}
@@ -562,9 +533,9 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 key={userData._id}
                 user={userData}
                 isPending={false}
-                isOrganizer={canManage}
                 isSelf={userData._id === user?.id}
                 isTargetOwner={isOwner(userData._id)}
+                isSoleOwner={isSoleOwner}
                 canManage={canManage}
                 onStartChat={handleStartChat}
                 onViewProfile={handleViewProfile}
@@ -610,13 +581,11 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         title={actionMenuUser?.name}
         options={[
           { label: 'Make Owner', value: 'promote' },
-          ...(isOrganizer ? [{ label: 'Transfer Ownership', value: 'transfer' }] : []),
           { label: 'Remove from Roster', value: 'kick' },
         ]}
         onSelect={(action) => {
           const targetUser = actionMenuUser;
           if (action === 'promote') handleMakeOwner(targetUser);
-          else if (action === 'transfer') handleTransferOwnership(targetUser);
           else if (action === 'kick') handleKick(targetUser);
         }}
         onClose={() => setActionMenuUser(null)}

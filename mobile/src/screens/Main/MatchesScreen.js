@@ -119,10 +119,10 @@ const MatchItem = ({ item, onPress }) => {
         <View style={styles.centerSection}>
           <View style={styles.contentRow}>
             <View style={styles.nameSection}>
-              {/* Category, role (organizer/owner) and category badges share
-                  one row - role used to sit next to the name instead,
-                  which read as attached to the title rather than as a
-                  status pill alongside the category. */}
+              {/* Category and role (owner) badges share one row - role used
+                  to sit next to the name instead, which read as attached
+                  to the title rather than as a status pill alongside the
+                  category. */}
               <View style={styles.badgeRow}>
                 {item.category && (
                   <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
@@ -131,12 +131,10 @@ const MatchItem = ({ item, onPress }) => {
                     </Text>
                   </View>
                 )}
-                {(item.role === 'organizer' || item.role === 'owner') && (
+                {item.role === 'owner' && (
                   <View style={styles.roleBadge}>
                     <Ionicons name="star" size={10} color="#FFD700" />
-                    <Text style={styles.roleBadgeText}>
-                      {item.role === 'organizer' ? 'Organizer' : 'Owner'}
-                    </Text>
+                    <Text style={styles.roleBadgeText}>Owner</Text>
                   </View>
                 )}
               </View>
@@ -247,7 +245,7 @@ export default function MatchesScreen({ navigation, route }) {
               lastMessageTime: item.lastMessage?.createdAt || item.joinedAt,
               unreadCount: item.unreadCount || 0,
               participantCount: event.currentAttendees || event.currentMembers,
-              // 'organizer' or 'owner' (a promoted admin) - see
+              // 'owner' (any owner has identical rights) - see
               // GET /participations, which sets this same field.
               role: item.userRole,
               // A cancelled event/group is removed from the feed entirely

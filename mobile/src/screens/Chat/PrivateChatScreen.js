@@ -119,37 +119,6 @@ export default function PrivateChatScreen({ route, navigation }) {
     }
   };
 
-  const handleAcceptTransferOwnership = async (message) => {
-    const eventId = message.systemMessage?.data?.eventId;
-    if (!eventId) return;
-    setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepting' }));
-    try {
-      const response = await api.post(`/events/${eventId}/accept-transfer-ownership`, { messageId: message._id });
-      if (response.data.success) {
-        setInviteStatuses(prev => ({ ...prev, [message._id]: 'accepted' }));
-      } else {
-        throw new Error(response.data.message || 'Failed to accept');
-      }
-    } catch (error) {
-      setInviteStatuses(prev => {
-        const next = { ...prev };
-        delete next[message._id];
-        return next;
-      });
-      Alert.alert('Error', error.response?.data?.message || 'Failed to accept transfer');
-    }
-  };
-
-  const handleDeclineTransferOwnership = (message) => {
-    setInviteStatuses(prev => ({ ...prev, [message._id]: 'declined' }));
-    const eventId = message.systemMessage?.data?.eventId;
-    if (eventId) {
-      api.post(`/events/${eventId}/decline-transfer-ownership`, { messageId: message._id }).catch(() => {
-        // Non-critical - worst case the card re-offers the buttons after a reload.
-      });
-    }
-  };
-
   // Load messages
   const loadMessages = useCallback(async (showLoadingSpinner = true) => {
     if (!connectionId || !user?.id) {
@@ -489,78 +458,10 @@ export default function PrivateChatScreen({ route, navigation }) {
     );
   };
 
-  // Render a transfer-ownership card - same shape as an owner-invite
-  // card, but accepting it replaces the event's organizer outright
-  // rather than adding a co-owner.
-  const renderTransferOwnershipCard = (item) => {
-    const data = item.systemMessage?.data || {};
-    const status = inviteStatuses[item._id] || data.responseStatus || 'pending';
-    const isRecipient = data.invitedUserId === user?.id;
-
-    return (
-      <View style={styles.inviteCardContainer}>
-        <View style={styles.inviteCard}>
-          <View style={styles.inviteCardHeader}>
-            <Ionicons name="swap-horizontal" size={18} color="#0078FF" />
-            <Text style={styles.inviteCardTitle} numberOfLines={2}>
-              {isRecipient
-                ? `${data.fromUserName ? `${data.fromUserName} wants` : 'They want'} to transfer ownership of "${data.eventName}" to you`
-                : `Offered ${data.toUserName || 'them'} ownership of "${data.eventName}"`
-              }
-            </Text>
-          </View>
-        </View>
-
-        {status === 'accepted' ? (
-          <View style={styles.inviteCardResult}>
-            <Ionicons name="checkmark-circle" size={20} color="#00C853" />
-            <Text style={styles.inviteCardResultText}>
-              {isRecipient ? "You're the organizer now" : 'Accepted'}
-            </Text>
-          </View>
-        ) : status === 'declined' ? (
-          <View style={styles.inviteCardResult}>
-            <Ionicons name="close-circle" size={20} color="#999999" />
-            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Declined</Text>
-          </View>
-        ) : !isRecipient ? (
-          <View style={styles.inviteCardResult}>
-            <Ionicons name="time-outline" size={20} color="#999999" />
-            <Text style={[styles.inviteCardResultText, { color: '#999999' }]}>Pending</Text>
-          </View>
-        ) : (
-          <View style={styles.inviteCardActions}>
-            <TouchableOpacity
-              style={styles.inviteCardPassButton}
-              onPress={() => handleDeclineTransferOwnership(item)}
-              disabled={status === 'accepting'}
-            >
-              <Ionicons name="close" size={22} color="#FF3B30" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.inviteCardAcceptButton}
-              onPress={() => handleAcceptTransferOwnership(item)}
-              disabled={status === 'accepting'}
-            >
-              {status === 'accepting' ? (
-                <ActivityIndicator size="small" color="#00C853" />
-              ) : (
-                <Ionicons name="checkmark" size={22} color="#00C853" />
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
-
   // Render message item (iPhone Messages style)
   const renderMessage = ({ item, index }) => {
     if (item.messageType === 'system' && item.systemMessage?.type === 'owner_invite') {
       return renderOwnerInviteCard(item);
-    }
-    if (item.messageType === 'system' && item.systemMessage?.type === 'transfer_ownership') {
-      return renderTransferOwnershipCard(item);
     }
 
     const isOwn = item.sender?._id === user?.id || item.isOwn;

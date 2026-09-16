@@ -38,31 +38,13 @@ router.get('/', protect, async (req, res) => {
       .sort('-chatParticipation.lastMessageAt')
       .lean();
 
-    // Get organized events (events/groups user created)
-    let organizedEventsQuery = {
-      organizer: req.user.id,
-      isArchived: false,
-      isActive: true
-    };
-
-    // Apply type filter if specified
-    if (type === 'event' || type === 'group') {
-      organizedEventsQuery.type = type;
-    }
-
-    const organizedEvents = await Event.find(organizedEventsQuery)
-      .populate('organizer', 'name photos')
-      .sort('-createdAt');
-
-    // Events/groups this user was promoted to owner of (but doesn't
-    // organize) - they get the same manage capabilities (edit, archive,
-    // invite) as the organizer, so they need the same 'isMyEvent' signal
-    // on the client. A plain Participation record (from accepting the
-    // roster application) doesn't carry that - owner status lives only
-    // on Event.admins.
+    // Events/groups this user owns (every owner has identical rights -
+    // there's no more-powerful "organizer" tier). They get the same
+    // manage capabilities (edit, cancel, invite) on the client, which a
+    // plain Participation record (from accepting a roster application)
+    // doesn't carry - owner status lives only on Event.admins.
     const ownedEventsQuery = {
       admins: req.user.id,
-      organizer: { $ne: req.user.id },
       isArchived: false,
       isActive: true
     };
@@ -73,26 +55,12 @@ router.get('/', protect, async (req, res) => {
       .populate('organizer', 'name photos')
       .sort('-createdAt');
 
-    console.log(`✅ Found ${participations.length} participations + ${organizedEvents.length} organized events + ${ownedEvents.length} owned events`);
+    console.log(`✅ Found ${participations.length} participations + ${ownedEvents.length} owned events`);
 
     // Filter participations by type if specified
     if (type === 'event' || type === 'group') {
       participations = participations.filter(p => p.event && p.event.type === type);
     }
-
-    // Transform organized events to match participation format
-    const transformedOrganizedEvents = organizedEvents.map(event => ({
-      _id: event._id,
-      event: event,
-      userRole: 'organizer',
-      status: 'accepted',
-      isArchived: false,
-      chatParticipation: {
-        hasJoinedChat: true,
-        unreadCount: 0,
-        lastMessageAt: event.updatedAt
-      }
-    }));
 
     const transformedOwnedEvents = ownedEvents.map(event => ({
       _id: event._id,
@@ -109,14 +77,14 @@ router.get('/', protect, async (req, res) => {
 
     // Combine and dedupe by event ID - stale/duplicate Participation
     // records (created before the unique event+participant index was in
-    // place) or a participation that happens to point at your own
-    // organized event would otherwise render the same event/group
+    // place) or a participation that happens to point at an event this
+    // user also owns would otherwise render the same event/group
     // multiple times in a row.
-    // Organized/owned entries first - the dedupe below keeps whichever
-    // copy of an event it sees first, and a plain Participation record
-    // for an event this user also owns wouldn't carry userRole: 'owner',
-    // losing the "can manage this" signal on the client if it won out.
-    const combined = [...transformedOrganizedEvents, ...transformedOwnedEvents, ...participations];
+    // Owned entries first - the dedupe below keeps whichever copy of an
+    // event it sees first, and a plain Participation record for an event
+    // this user also owns wouldn't carry userRole: 'owner', losing the
+    // "can manage this" signal on the client if it won out.
+    const combined = [...transformedOwnedEvents, ...participations];
     const seenEventIds = new Set();
     const allItems = combined.filter(item => {
       const eventId = item.event?._id?.toString();
