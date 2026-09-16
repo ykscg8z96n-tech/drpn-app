@@ -1070,24 +1070,29 @@ router.delete('/:id', protect, async (req, res) => {
       archivedAt: new Date()
     });
 
-    // Tell the roster this closed - only actually news for an event if
-    // it's happening early (closing after the date already passed isn't
-    // a surprise to anyone); a group has no date, so closing it is
-    // always worth telling people, worded differently since there's no
-    // "early" concept for a group.
-    const isEarlyEventClose = event.type === 'event' && new Date(event.eventDate) > new Date();
-    if (isEarlyEventClose || event.type === 'group') {
-      try {
-        const rosterIds = event.applicants
-          .filter(a => a.status === 'accepted' && a.userId.toString() !== req.user.id)
-          .map(a => a.userId);
-        const noticeText = event.type === 'event'
-          ? `The organizer closed "${event.name}" before it happened. The chat is still open if you want to keep talking with the group.`
-          : `The organizer closed the group "${event.name}". The chat is still open if you want to keep talking or make new plans.`;
-        await Promise.all(rosterIds.map(userId => sendBotNotice(userId, noticeText, req)));
-      } catch (notifyError) {
-        console.error('⚠️ Failed to send close notices:', notifyError);
-      }
+    // A manual close (this route) always closes the downstream chat for
+    // the whole roster, unlike a natural date expiry which never touches
+    // Participation - that's what keeps a chat alive after its event just
+    // happens to run out the clock. Archiving each accepted member's
+    // Participation record both drops the event from their feed (the
+    // GET /participations query filters on it) and revokes their chat
+    // access (messages.js gates send/read the same way).
+    try {
+      const rosterIds = event.applicants
+        .filter(a => a.status === 'accepted' && a.userId.toString() !== req.user.id)
+        .map(a => a.userId);
+
+      await Participation.updateMany(
+        { event: event._id, participant: { $in: rosterIds } },
+        { isArchived: true }
+      );
+
+      const noticeText = event.type === 'event'
+        ? `The organizer closed "${event.name}". The chat is now closed.`
+        : `The organizer closed the group "${event.name}". The chat is now closed.`;
+      await Promise.all(rosterIds.map(userId => sendBotNotice(userId, noticeText, req)));
+    } catch (notifyError) {
+      console.error('⚠️ Failed to close roster chat access / send close notices:', notifyError);
     }
 
     res.json({
