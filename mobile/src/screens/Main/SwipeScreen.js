@@ -561,28 +561,28 @@ export default function SwipeScreen({ navigation }) {
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
-            // Only the vertical sizing props are touched here,
-            // deliberately - the library computes card position/size
-            // from the raw window dimensions (Dimensions.get('window'),
-            // not this container's actual measured size), and a
-            // previous attempt to also override cardHorizontalMargin
-            // threw the card's horizontal centering off since our
-            // container isn't full-bleed edge-to-edge like the library
-            // assumes. Leaving cardHorizontalMargin at its default (20)
-            // avoids that entirely.
+            // The library computes each card's top/left/width/height
+            // from raw window dimensions (Dimensions.get('window'), not
+            // this container's actual measured size) using
+            // cardVerticalMargin/cardHorizontalMargin/marginTop/
+            // marginBottom. Overriding cardHorizontalMargin previously
+            // threw off horizontal centering (this container isn't
+            // full-bleed like the library assumes) - left at its
+            // default (20) here for that reason.
             //
-            // cardHeight = windowHeight - cardVerticalMargin*2 -
-            // marginTop - marginBottom, so cardVerticalMargin alone
-            // only has 40px of further height to give (20 -> 0) before
-            // it bottoms out - to make the card taller still (by ~1.5x
-            // the pass button's 60px height, ~90px total), marginTop/
-            // marginBottom go negative to make up the remaining 50px,
-            // split evenly so the extra height doesn't come entirely
-            // from one side and risk overlapping the banner above or
-            // the button row below more than the other.
-            cardVerticalMargin={0}
-            marginTop={-25}
-            marginBottom={-25}
+            // Negative marginTop/marginBottom (tried to gain height
+            // beyond what cardVerticalMargin=0 alone allows) backfired:
+            // they apply to the Swiper's own flex-sized outer wrapper,
+            // and shrank its box instead of growing the card, the
+            // opposite of the formula's intent. cardStyle is the fix -
+            // it's merged in last, after the library's own computed
+            // style, so setting height there overrides the buggy
+            // subtraction entirely rather than fighting it. Height here
+            // is windowHeight minus the same 40px (cardVerticalMargin
+            // 20 top+bottom) the rest of the card's positioning still
+            // assumes, plus 90px (~1.5x the pass button's 60px height).
+            cardVerticalMargin={20}
+            cardStyle={{ height: windowHeight - 40 + 90 }}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
