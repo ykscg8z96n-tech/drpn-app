@@ -561,6 +561,19 @@ export default function SwipeScreen({ navigation }) {
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
+            // Only cardVerticalMargin is overridden here, deliberately -
+            // the library computes card position/size from the raw
+            // window dimensions (Dimensions.get('window'), not this
+            // container's actual measured size), and a previous attempt
+            // to also override cardHorizontalMargin threw the card's
+            // horizontal centering off since our container isn't
+            // full-bleed edge-to-edge like the library assumes. Leaving
+            // cardHorizontalMargin at its default (20) avoids that;
+            // shrinking just the vertical margin (default 60, way more
+            // than this layout needs above/below the card) removes the
+            // bulk of the reported dead space with the smallest,
+            // lowest-risk change.
+            cardVerticalMargin={20}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
