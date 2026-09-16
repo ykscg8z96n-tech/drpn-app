@@ -14,8 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
-// Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins
-const CARD_HEIGHT = height - 265;
+// Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins,
+// plus +90 (~1.5x the pass button's 60px height) requested on top of that fit.
+// Exported so SwipeScreen can size the Swiper's own card box to match this
+// exactly - this component sizes itself regardless of whatever the Swiper
+// wrapper's box is, so the two drifting out of sync is what left a gap
+// above/below the actual visible card in earlier attempts to resize it
+// from the Swiper side alone.
+export const CARD_HEIGHT = height - 265 + 90;
 
 // Stock images for each category - same as CreateNewScreen.js
 const STOCK_IMAGES = {

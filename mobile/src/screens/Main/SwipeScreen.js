@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import api from '../../services/api';
-import EventCard from '../../components/EventCard';
+import EventCard, { CARD_HEIGHT } from '../../components/EventCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFilter } from '../../contexts/FilterContext';
 import { USE_MOCK_API } from '../../utils/constants';
@@ -561,28 +561,25 @@ export default function SwipeScreen({ navigation }) {
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
-            // The library computes each card's top/left/width/height
-            // from raw window dimensions (Dimensions.get('window'), not
-            // this container's actual measured size) using
-            // cardVerticalMargin/cardHorizontalMargin/marginTop/
-            // marginBottom. Overriding cardHorizontalMargin previously
-            // threw off horizontal centering (this container isn't
-            // full-bleed like the library assumes) - left at its
-            // default (20) here for that reason.
-            //
-            // Negative marginTop/marginBottom (tried to gain height
-            // beyond what cardVerticalMargin=0 alone allows) backfired:
-            // they apply to the Swiper's own flex-sized outer wrapper,
-            // and shrank its box instead of growing the card, the
-            // opposite of the formula's intent. cardStyle is the fix -
-            // it's merged in last, after the library's own computed
-            // style, so setting height there overrides the buggy
-            // subtraction entirely rather than fighting it. Height here
-            // is windowHeight minus the same 40px (cardVerticalMargin
-            // 20 top+bottom) the rest of the card's positioning still
-            // assumes, plus 90px (~1.5x the pass button's 60px height).
+            // The real bug behind every earlier attempt at this: the
+            // Swiper library sizes its own card wrapper from raw window
+            // dimensions via cardVerticalMargin/cardHorizontalMargin/
+            // marginTop/marginBottom, but EventCard (the thing actually
+            // rendered inside it) sizes ITSELF via its own fixed
+            // CARD_HEIGHT constant, completely ignoring whatever box
+            // the Swiper gives it. Resizing the Swiper's side alone
+            // just changed how much empty space surrounded an
+            // unchanged-size EventCard - never the visible card itself.
+            // cardStyle (merged in last, after the library's own
+            // computed style) now pins the Swiper's box to the exact
+            // same CARD_HEIGHT EventCard uses for its own size, so the
+            // two can't drift apart into a gap on either side again.
+            // cardHorizontalMargin stays at its default (20) - a
+            // previous override threw off horizontal centering, since
+            // this container isn't full-bleed edge-to-edge like the
+            // library assumes.
             cardVerticalMargin={20}
-            cardStyle={{ height: windowHeight - 40 + 90 }}
+            cardStyle={{ height: CARD_HEIGHT }}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
