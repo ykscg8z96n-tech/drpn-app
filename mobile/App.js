@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SocketProvider } from './src/contexts/SocketContext';
+import { registerForPushNotifications } from './src/utils/webPush';
 
 // The page's own background (html/body) is white by default - Expo's web
 // reset only sets height, not color. Every screen paints its own dark
@@ -64,9 +65,16 @@ function RootNavigator() {
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
-    
+
     return () => clearTimeout(timer);
   }, []);
+
+  // Best-effort - silently does nothing if push isn't supported (native,
+  // or a browser tab that isn't an installed PWA on iOS) or the user
+  // hasn't granted notification permission.
+  useEffect(() => {
+    if (user) registerForPushNotifications();
+  }, [user]);
 
   if (loading || showSplash) {
     return <SplashScreen />;

@@ -53,6 +53,24 @@ const checkPrivateAccess = async (chatId, userId) => {
   return chatId === `private-${uids[0]}-${uids[1]}`;
 };
 
+// Returns the actual PrivateConnection doc if the user may access this
+// chat, otherwise null - what message:send needs (it saves against and
+// updates this doc), as opposed to checkPrivateAccess's plain boolean.
+const getPrivateConnection = async (chatId, userId) => {
+  if (!chatId.startsWith('private-')) return null;
+
+  const connection = await PrivateConnection.findOne({
+    $or: [{ participant: userId }, { otherUser: userId }],
+    status: 'accepted',
+    isArchived: false,
+    'chatParticipation.isBlocked': false
+  });
+  if (!connection) return null;
+
+  const uids = [connection.participant.toString(), connection.otherUser.toString()].sort();
+  return chatId === `private-${uids[0]}-${uids[1]}` ? connection : null;
+};
+
 // Single entry point: true if userId may join/read/send in this chat.
 const hasChatAccess = async (chatType, chatId, userId) => {
   if (chatType === 'event' || chatType === 'group') {
@@ -64,4 +82,4 @@ const hasChatAccess = async (chatType, chatId, userId) => {
   return false;
 };
 
-module.exports = { hasChatAccess, checkEventAccess, checkPrivateAccess, parseEventChatId };
+module.exports = { hasChatAccess, checkEventAccess, checkPrivateAccess, getPrivateConnection, parseEventChatId };

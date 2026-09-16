@@ -10,6 +10,8 @@ const ChatCounter = require('../models/ChatCounter');
 const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const { getBotUserId } = require('../services/botUser');
+const { sendPushToUser } = require('../services/webPush');
+const { isUserOnline } = require('../socket/socketHandler');
 const { protect, organizer, premium } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -165,6 +167,19 @@ async function postPrivateNotification(fromUserId, toUserId, originEventId, text
   if (io) {
     io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
   }
+  await pushIfOffline(toUserId, { title: message.sender?.name || 'DRPN', body: text, url: '/' });
+}
+
+// A card/notification's recipient only needs a push if they don't
+// already have a live socket connection that'll show it in real time -
+// mirrors the same check in socketHandler.js's message:send.
+async function pushIfOffline(userId, payload) {
+  if (isUserOnline(userId)) return;
+  try {
+    await sendPushToUser(userId, payload);
+  } catch (error) {
+    console.error('⚠️ Push notify failed:', error);
+  }
 }
 
 // A plain-text bot announcement into an event/group's own chat - "X
@@ -228,6 +243,11 @@ async function postOwnerInviteCard(event, fromUserId, toUserId, req) {
   if (io) {
     io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
   }
+  await pushIfOffline(toUserId, {
+    title: inviter?.name || 'DRPN',
+    body: `Invited you to be an owner of "${event.name}"`,
+    url: '/'
+  });
 }
 
 // Transferring the organizer role has to be opted into by the recipient,
@@ -270,6 +290,11 @@ async function postTransferOwnershipCard(event, fromUserId, toUserId, req) {
   if (io) {
     io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
   }
+  await pushIfOffline(toUserId, {
+    title: fromUser?.name || 'DRPN',
+    body: `Wants to transfer ownership of "${event.name}" to you`,
+    url: '/'
+  });
 }
 
 // Define valid categories directly in this file
