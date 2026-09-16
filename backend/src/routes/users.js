@@ -12,6 +12,7 @@ const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { getBotUserId } = require('../services/botUser');
 const { getOrCreatePrivateConnection, sendWelcomeMessage } = require('../services/botNotice');
+const { cancelEventForRoster } = require('../services/eventLifecycle');
 
 // No need for category validation since users don't have preferred categories
 // const VALID_CATEGORIES = ['tabletop', 'cards', 'fantasy', 'sports', 'golf', 'health'];
@@ -614,11 +615,13 @@ router.delete('/me', protect, async (req, res) => {
           console.error('⚠️ Failed to post organizer-handoff announcement:', announceError);
         }
       } else {
-        // No one else to hand it to - archive rather than delete outright,
-        // so it drops out of discovery but other participants' history
-        // (matches, past messages) isn't destroyed with it.
-        event.isArchived = true;
-        await event.save();
+        // No one else to hand it to - cancel it the same way DELETE
+        // /events/:id does: the roster's own Participation records get
+        // archived (drops it from their feed, revokes chat access) and
+        // they each get a bot notice, instead of just flipping isArchived
+        // and leaving everyone else's chat dangling open to a group/event
+        // that no longer has anyone who can manage it.
+        await cancelEventForRoster(event, userId, req.user.name, req);
       }
     }
 
