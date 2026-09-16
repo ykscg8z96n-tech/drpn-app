@@ -10,6 +10,11 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Set only by a fresh signUp() - App.js reads this once, as the Main
+  // navigator's initial params, to land a brand new account straight in
+  // the bot's welcome chat instead of the normal LFG tab. Not touched by
+  // signIn/loadStoredData, so a returning user never sees it.
+  const [pendingWelcomeChat, setPendingWelcomeChat] = useState(null);
 
   useEffect(() => {
     loadStoredData();
@@ -60,6 +65,16 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.setItem('user', JSON.stringify(user));
 
     api.defaults.headers.authorization = `Bearer ${token}`;
+
+    // Best-effort - if this fails, signup still succeeds, the user just
+    // lands on the normal LFG tab instead of the welcome chat.
+    try {
+      const botChatResponse = await api.get('/users/bot-chat');
+      setPendingWelcomeChat(botChatResponse.data.data);
+    } catch (botError) {
+      console.error('Error loading welcome chat:', botError);
+    }
+
     setUser(user);
 
     return { success: true };
@@ -78,6 +93,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('user');
       setUser(null);
+      setPendingWelcomeChat(null);
       delete api.defaults.headers.authorization;
     } catch (error) {
       console.error('Error signing out:', error);
@@ -91,13 +107,14 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider 
-      value={{ 
-        user, 
-        loading, 
-        signIn, 
-        signUp, 
-        signOut, 
-        updateUser 
+      value={{
+        user,
+        loading,
+        pendingWelcomeChat,
+        signIn,
+        signUp,
+        signOut,
+        updateUser
       }}
     >
       {children}

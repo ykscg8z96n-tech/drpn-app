@@ -69,9 +69,14 @@ function SwipeStack() {
   );
 }
 
-function MatchesStack() {
+function MatchesStack({ route }) {
+  // A brand new signup lands here first instead of on MatchesMain - see
+  // MainNavigator's own use of `welcomeChat` below.
+  const welcomeChat = route?.params?.welcomeChat;
+
   return (
     <Stack.Navigator
+      initialRouteName={welcomeChat ? 'PrivateChat' : 'MatchesMain'}
       screenOptions={{
         headerStyle: {
           backgroundColor: '#0A0A0A',
@@ -92,17 +97,21 @@ function MatchesStack() {
         component={MatchesScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="Chat" 
+      <Stack.Screen
+        name="Chat"
         component={ChatScreen}
-        options={({ route }) => ({ 
+        options={({ route }) => ({
           title: '',
           headerBackTitleVisible: false,
         })}
       />
-      <Stack.Screen 
-        name="PrivateChat" 
+      <Stack.Screen
+        name="PrivateChat"
         component={PrivateChatScreen}
+        initialParams={welcomeChat ? {
+          connectionId: welcomeChat.connectionId,
+          otherUser: { name: welcomeChat.bot.name, image: welcomeChat.bot.photos?.[0] }
+        } : undefined}
         options={{
           headerShown: true,
           headerStyle: {
@@ -225,7 +234,7 @@ function ProfileStack() {
   );
 }
 
-function TabNavigatorContent() {
+function TabNavigatorContent({ welcomeChat }) {
   const { selectedFilter } = useFilter();
   const insets = useSafeAreaInsets();
 
@@ -241,6 +250,7 @@ function TabNavigatorContent() {
 
   return (
     <Tab.Navigator
+      initialRouteName={welcomeChat ? 'Chats' : 'LFG'}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
@@ -296,7 +306,11 @@ function TabNavigatorContent() {
       })}
     >
       <Tab.Screen name="LFG" component={SwipeStack} />
-      <Tab.Screen name="Chats" component={MatchesStack} />
+      <Tab.Screen
+        name="Chats"
+        component={MatchesStack}
+        initialParams={welcomeChat ? { welcomeChat } : undefined}
+      />
       <Tab.Screen name="Home" component={CreateStack} />
       <Tab.Screen name="Invite" component={InviteStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
@@ -304,10 +318,10 @@ function TabNavigatorContent() {
   );
 }
 
-export default function MainNavigator() {
+export default function MainNavigator({ route }) {
   return (
     <FilterProvider>
-      <TabNavigatorContent />
+      <TabNavigatorContent welcomeChat={route?.params?.welcomeChat} />
     </FilterProvider>
   );
 }

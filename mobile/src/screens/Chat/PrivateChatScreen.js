@@ -722,6 +722,16 @@ export default function PrivateChatScreen({ route, navigation }) {
         )}
       />
       
+      {otherUserData?.name === 'DRPN' && (
+        <TouchableOpacity
+          style={styles.getStartedButton}
+          onPress={() => navigation.navigate('LFG')}
+        >
+          <Ionicons name="megaphone" size={18} color="#FFFFFF" />
+          <Text style={styles.getStartedButtonText}>Get Started - Find events near you</Text>
+        </TouchableOpacity>
+      )}
+
       {renderInputArea()}
 
       <ActionSheet
@@ -884,6 +894,22 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  getStartedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0078FF',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  getStartedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '600',
   },
 
