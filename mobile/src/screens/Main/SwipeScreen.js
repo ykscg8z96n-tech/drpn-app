@@ -561,19 +561,28 @@ export default function SwipeScreen({ navigation }) {
             onSwipedAll={onSwipedAll}
             cardIndex={cardIndex}
             backgroundColor="transparent"
-            // Only cardVerticalMargin is overridden here, deliberately -
-            // the library computes card position/size from the raw
-            // window dimensions (Dimensions.get('window'), not this
-            // container's actual measured size), and a previous attempt
-            // to also override cardHorizontalMargin threw the card's
-            // horizontal centering off since our container isn't
-            // full-bleed edge-to-edge like the library assumes. Leaving
-            // cardHorizontalMargin at its default (20) avoids that;
-            // shrinking just the vertical margin (default 60, way more
-            // than this layout needs above/below the card) removes the
-            // bulk of the reported dead space with the smallest,
-            // lowest-risk change.
-            cardVerticalMargin={20}
+            // Only the vertical sizing props are touched here,
+            // deliberately - the library computes card position/size
+            // from the raw window dimensions (Dimensions.get('window'),
+            // not this container's actual measured size), and a
+            // previous attempt to also override cardHorizontalMargin
+            // threw the card's horizontal centering off since our
+            // container isn't full-bleed edge-to-edge like the library
+            // assumes. Leaving cardHorizontalMargin at its default (20)
+            // avoids that entirely.
+            //
+            // cardHeight = windowHeight - cardVerticalMargin*2 -
+            // marginTop - marginBottom, so cardVerticalMargin alone
+            // only has 40px of further height to give (20 -> 0) before
+            // it bottoms out - to make the card taller still (by ~1.5x
+            // the pass button's 60px height, ~90px total), marginTop/
+            // marginBottom go negative to make up the remaining 50px,
+            // split evenly so the extra height doesn't come entirely
+            // from one side and risk overlapping the banner above or
+            // the button row below more than the other.
+            cardVerticalMargin={0}
+            marginTop={-25}
+            marginBottom={-25}
             stackSize={3}
             stackScale={10}
             stackSeparation={15}
