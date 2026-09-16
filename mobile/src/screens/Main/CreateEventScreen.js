@@ -483,7 +483,7 @@ export default function CreateEventScreen({ navigation }) {
               setMyEvents(prev => prev.filter(e => e._id !== event._id));
               Alert.alert('Success', `${noun} cancelled successfully`);
             } catch (error) {
-              Alert.alert('Error', `Failed to cancel ${noun.toLowerCase()}`);
+              Alert.alert('Error', error.response?.data?.message || `Failed to cancel ${noun.toLowerCase()}`);
             }
           }
         }
@@ -863,12 +863,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+    textAlign: 'center',
   },
   archiveButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+    textAlign: 'center',
   },
   pendingBadge: {
     position: 'absolute',

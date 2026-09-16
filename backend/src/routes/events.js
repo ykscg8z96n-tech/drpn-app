@@ -899,6 +899,16 @@ router.delete('/:id', protect, async (req, res) => {
     if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
+    // Cancelling destroys it for every co-owner too, not just the caller -
+    // with another owner still around, the right move is stepping down
+    // (POST /:id/step-down), not unilaterally nuking it out from under
+    // them. Only the sole owner can actually cancel.
+    if (event.admins.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'There are other owners - step down instead of cancelling, or have them step down first'
+      });
+    }
 
     await cancelEventForRoster(event, req.user.id, req.user.name, req);
 
