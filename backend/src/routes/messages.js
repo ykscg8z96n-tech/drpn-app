@@ -8,6 +8,8 @@ const Participation = require('../models/Participation');
 const PrivateConnection = require('../models/PrivateConnection');
 const Event = require('../models/Event');
 const { protect } = require('../middleware/auth');
+const { isUserOnline } = require('../socket/socketHandler');
+const { sendPushToUser } = require('../services/webPush');
 
 // @route   POST /api/messages
 // @desc    Send a message to any chat type (event/group/private)
@@ -111,6 +113,24 @@ router.post('/', [protect,
 
       console.log(`✅ ${chatType} message sent to ${event.name} by ${accessType}`);
 
+      // Push notify offline participants - this is the only place a
+      // message actually gets created (the client sends over REST, not
+      // the socket), so this is where push needs to happen too.
+      const allParticipants = await Participation.getEventParticipants(eventId);
+      const offlineRecipientIds = allParticipants
+        .map(p => (p.participant?._id || p.participant)?.toString())
+        .filter(id => id && id !== req.user.id && !isUserOnline(id));
+      const preview = text.trim().length > 120 ? `${text.trim().slice(0, 117)}...` : text.trim();
+      console.log(`🔔 Push check (${chatType}): ${offlineRecipientIds.length} offline recipient(s) of ${allParticipants.length} total`);
+      offlineRecipientIds.forEach(id => {
+        sendPushToUser(id, {
+          title: `${req.user.name} in ${chatType === 'group' ? 'your group' : 'your event'}`,
+          body: preview,
+          url: '/'
+        }).then(sent => console.log(`🔔 Push to ${id}: ${sent ? 'sent' : 'skipped (no subscription/VAPID)'}`))
+          .catch(err => console.error('⚠️ Push notify (event) failed:', err));
+      });
+
     } else if (chatType === 'private') {
       // Private chat message
       if (!privateConnectionId) {
@@ -166,6 +186,21 @@ router.post('/', [protect,
       await connection.updateLastMessage();
 
       console.log('✅ Private message sent to shared room');
+
+      // Push notify the recipient if they're offline - same reasoning
+      // as the event/group branch above.
+      const recipientId = [userId1, userId2].find(id => id !== req.user.id);
+      const recipientOnline = recipientId && isUserOnline(recipientId);
+      console.log(`🔔 Push check (private): recipient=${recipientId} online=${recipientOnline}`);
+      if (recipientId && !recipientOnline) {
+        const preview = text.trim().length > 120 ? `${text.trim().slice(0, 117)}...` : text.trim();
+        sendPushToUser(recipientId, {
+          title: req.user.name,
+          body: preview,
+          url: '/'
+        }).then(sent => console.log(`🔔 Push to ${recipientId}: ${sent ? 'sent' : 'skipped (no subscription/VAPID)'}`))
+          .catch(err => console.error('⚠️ Push notify (private) failed:', err));
+      }
     }
 
     // Populate sender info
