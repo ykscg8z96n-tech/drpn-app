@@ -107,11 +107,15 @@ export default function JoinByCodeScreen({ navigation, route }) {
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <View style={styles.content}>
           {/* Header Icon */}
           <View style={styles.iconContainer}>
-            <Ionicons name="ticket" size={64} color="#6366F1" />
+            <Ionicons name="ticket" size={48} color="#6366F1" />
           </View>
 
           {/* Title and Description */}
@@ -198,29 +202,29 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 32,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   iconContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
+    lineHeight: 21,
+    marginBottom: 20,
   },
   inputContainer: {
-    marginBottom: 32,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 16,
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   joinButtonDisabled: {
     backgroundColor: '#374151',
@@ -269,19 +273,19 @@ const styles = StyleSheet.create({
   howItWorksContainer: {
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
+    padding: 16,
+    marginBottom: 12,
   },
   howItWorksTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   step: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   stepText: {
     fontSize: 14,
@@ -291,7 +295,7 @@ const styles = StyleSheet.create({
   },
   browseButton: {
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
   },
   browseButtonText: {
     fontSize: 16,
