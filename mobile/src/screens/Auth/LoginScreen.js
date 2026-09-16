@@ -141,15 +141,13 @@ export default function LoginScreen() {
               <Text style={styles.socialButtonText}>Continue with Google</Text>
             </TouchableOpacity>
 
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity
-                style={[styles.socialButton, styles.appleButton]}
-                onPress={() => handleSocialLogin('Apple')}
-              >
-                <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
-                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Continue with Apple</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.socialButton, styles.appleButton]}
+              onPress={() => handleSocialLogin('Apple')}
+            >
+              <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+              <Text style={[styles.socialButtonText, styles.appleButtonText]}>Continue with Apple</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.socialButton, styles.facebookButton]}
