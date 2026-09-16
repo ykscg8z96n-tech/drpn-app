@@ -191,7 +191,7 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                 decision, instead of a separate "Pending" button that hid the
                 roster behind it. */}
             <TouchableOpacity
-              style={item.isMyEvent ? styles.pendingButton : styles.rosterOnlyButton}
+              style={styles.rosterButton}
               onPress={() => onViewApplicants(item)}
             >
               <Ionicons name="people" size={24} color="white" />
@@ -214,15 +214,13 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                   <Text style={styles.actionButtonText}>Edit</Text>
                 </TouchableOpacity>
 
-                {item.type === 'group' && (
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => onInvite(item)}
-                  >
-                    <Ionicons name="person-add-outline" size={24} color="white" />
-                    <Text style={styles.actionButtonText}>Invite</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.inviteButton}
+                  onPress={() => onInvite(item)}
+                >
+                  <Ionicons name="person-add-outline" size={24} color="white" />
+                  <Text style={styles.actionButtonText}>Invite</Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.archiveButton}
@@ -507,17 +505,18 @@ export default function CreateEventScreen({ navigation }) {
     navigation.navigate('PendingApplications', { event });
   };
 
-  const handleInviteGroup = async (group) => {
+  const handleInvite = async (eventOrGroup) => {
     try {
-      const response = await api.post(`/events/${group._id}/invite`);
+      const response = await api.post(`/events/${eventOrGroup._id}/invite`);
       const { inviteCode } = response.data.data;
+      const label = eventOrGroup.type === 'group' ? 'group' : 'event';
       // The link only actually opens to the join screen on web (see App.js
       // linking config) - still worth including on native as plain text,
       // since most share targets (Messages, email) will still show it.
       const joinLink = Platform.OS === 'web'
         ? `${window.location.origin}/join/${inviteCode}`
         : `https://drpn.app/join/${inviteCode}`;
-      const message = `Join my group "${group.name}" on DRPN! Code: ${inviteCode}\n${joinLink}`;
+      const message = `Join my ${label} "${eventOrGroup.name}" on DRPN! Code: ${inviteCode}\n${joinLink}`;
 
       // navigator.share isn't available on most desktop browsers - check
       // up front rather than relying on Share.share's rejection, since
@@ -532,14 +531,14 @@ export default function CreateEventScreen({ navigation }) {
       }
 
       try {
-        await Share.share({ message, url: joinLink, title: `Join ${group.name}` });
+        await Share.share({ message, url: joinLink, title: `Join ${eventOrGroup.name}` });
       } catch (shareError) {
         // Cancelling the share sheet rejects the same way a real failure
         // would (e.g. AbortError on web) - nothing went wrong, so don't
         // show an error for it.
       }
     } catch (error) {
-      console.error('Error generating group invite code:', error);
+      console.error('Error generating invite code:', error);
       Alert.alert('Error', 'Failed to generate invite code. Please try again.');
     }
   };
@@ -687,7 +686,7 @@ export default function CreateEventScreen({ navigation }) {
                   onArchive={handleArchiveEvent}
                   onEdit={handleEditEvent}
                   onViewApplicants={handleViewApplicants}
-                  onInvite={handleInviteGroup}
+                  onInvite={handleInvite}
                   onWithdraw={handleWithdraw}
                   onViewDetails={handleViewDetails}
                   onScrollEnabled={handleScrollEnabled}
@@ -803,8 +802,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
     zIndex: 0,
   },
-  pendingButton: {
-    backgroundColor: '#FF9500',
+  rosterButton: {
+    backgroundColor: '#0078FF',
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -812,6 +811,12 @@ const styles = StyleSheet.create({
   },
   editButton: {
     backgroundColor: '#00B000',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inviteButton: {
+    backgroundColor: '#8B5CF6',
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -852,14 +857,6 @@ const styles = StyleSheet.create({
     minWidth: 20,
     alignItems: 'center',
   },
-  rosterOnlyButton: {
-    backgroundColor: '#0078FF',
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 240, // Full width for single button
-  },
-  
   // Event Card Styles
   eventCard: {
     backgroundColor: '#000000',
