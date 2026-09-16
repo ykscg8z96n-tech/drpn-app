@@ -140,6 +140,11 @@ const MatchItem = ({ item, onPress }) => {
                     </Text>
                   </View>
                 )}
+                {item.lifecycleBadge && (
+                  <View style={styles.lifecycleBadge}>
+                    <Text style={styles.lifecycleBadgeText}>{item.lifecycleBadge}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -239,7 +244,15 @@ export default function MatchesScreen({ navigation, route }) {
               participantCount: event.currentAttendees || event.currentMembers,
               // 'organizer' or 'owner' (a promoted admin) - see
               // GET /participations, which sets this same field.
-              role: item.userRole
+              role: item.userRole,
+              // 'Closed' (organizer archived it) or 'Expired' (an
+              // event's date passed on its own) - the chat itself stays
+              // open either way, this is just a status flag on it.
+              lifecycleBadge: event.isArchived
+                ? 'Closed'
+                : (activeTab === 'events' && event.eventDate && new Date(event.eventDate) < new Date())
+                  ? 'Expired'
+                  : null
             };
           }
         });
@@ -611,6 +624,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#FFD700',
+  },
+  lifecycleBadge: {
+    backgroundColor: '#333333',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  lifecycleBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#999999',
   },
   
   // Right Section - Time and participant count
