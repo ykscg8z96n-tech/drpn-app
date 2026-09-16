@@ -69,11 +69,32 @@ function RootNavigator() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Best-effort - silently does nothing if push isn't supported (native,
-  // or a browser tab that isn't an installed PWA on iOS) or the user
-  // hasn't granted notification permission.
+  // Requesting notification permission with no direct user gesture behind
+  // it - as this useEffect did - is exactly the case that can leave a
+  // freshly-installed iOS PWA's touch handling stuck (the native OS
+  // permission alert appears, but the page underneath never becomes
+  // interactive again except for whatever triggered that alert). Wait for
+  // the user's first real tap/touch after logging in instead, so the
+  // permission prompt (if it fires at all) is a direct response to a
+  // genuine gesture rather than something the page did on its own.
   useEffect(() => {
-    if (user) registerForPushNotifications();
+    if (!user || Platform.OS !== 'web') return;
+
+    let done = false;
+    const trigger = () => {
+      if (done) return;
+      done = true;
+      registerForPushNotifications();
+      document.removeEventListener('click', trigger);
+      document.removeEventListener('touchend', trigger);
+    };
+    document.addEventListener('click', trigger);
+    document.addEventListener('touchend', trigger);
+
+    return () => {
+      document.removeEventListener('click', trigger);
+      document.removeEventListener('touchend', trigger);
+    };
   }, [user]);
 
   if (loading || showSplash) {
