@@ -53,6 +53,12 @@ export default function SwipeScreen({ navigation }) {
   const [cardAreaHeight, setCardAreaHeight] = useState(null);
   const CARD_AREA_PADDING = 8;
   const computedCardHeight = cardAreaHeight ? cardAreaHeight - CARD_AREA_PADDING * 2 : CARD_HEIGHT;
+  // Same reasoning as cardAreaHeight above - the button row's real
+  // rendered height (not a guess from its own stylesheet math, which
+  // put a static marginBottom guess 8px off and still left a visible
+  // gap) is what swiperContainer's marginBottom needs to match so the
+  // card ends exactly where the buttons actually start.
+  const [buttonRowHeight, setButtonRowHeight] = useState(72);
   const swiperRef = useRef(null);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -539,6 +545,7 @@ export default function SwipeScreen({ navigation }) {
           style={[
             styles.swiperContainer,
             {
+              marginBottom: buttonRowHeight + 8,
               transform: [
                 { translateX: swipeHintX },
                 {
@@ -674,7 +681,10 @@ export default function SwipeScreen({ navigation }) {
         </Animated.View>
 
       {/* Floating Action Buttons */}
-      <View style={styles.floatingButtonsContainer}>
+      <View
+        style={styles.floatingButtonsContainer}
+        onLayout={(e) => setButtonRowHeight(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity style={[styles.button]} onPress={handleRewind}>
           <Ionicons name="arrow-undo" size={24} color="#666666" />
         </TouchableOpacity>
@@ -948,14 +958,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     // floatingButtonsContainer (the pass/like/filter row) is
     // position:absolute/bottom:0 - it floats ON TOP of this flex box
-    // rather than reserving its own space below it, so this margin is
+    // rather than reserving its own space below it, so marginBottom is
     // the ONLY thing stopping swiperContainer's flex height (and
     // anything measuring it, like the card-height onLayout fix) from
     // extending straight through the area the button row actually
-    // occupies. The previous 10px was nowhere near that row's real
-    // height (60px tallest button + 12px vertical padding = 72px) -
-    // rounded up to 80 for a little breathing room above the buttons.
-    marginBottom: 80,
+    // occupies. A static guess here (first 10, then 80) was never
+    // right in both directions - set inline instead, from the button
+    // row's own measured onLayout height (see buttonRowHeight state).
   },
   swipeHintBadgeLeft: {
     position: 'absolute',
