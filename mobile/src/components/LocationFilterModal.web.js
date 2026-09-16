@@ -175,7 +175,12 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const response = await api.get('/geocode/search', { params: { q: text } });
+        const params = { q: text };
+        if (deviceLocation) {
+          params.lat = deviceLocation.latitude;
+          params.lon = deviceLocation.longitude;
+        }
+        const response = await api.get('/geocode/search', { params });
         setSuggestions(response.data.data || []);
       } catch (error) {
         setSuggestions([]);
