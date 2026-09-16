@@ -16,13 +16,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 // Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins,
 // plus +90 (~1.5x the pass button's 60px height) requested on top of that
-// fit, then -40 (2x the expand handle's 20px height) - too tall at +90.
+// fit, then -40 (2x the expand handle's 20px height, too tall at +90),
+// then -20 more (1x expand handle height, still overlapping the button
+// row at +50) - net +30 over the original baseline. Height only moves
+// the card's bottom edge - top position comes from cardVerticalMargin
+// in SwipeScreen instead, so trimming this never moves the top down.
 // Exported so SwipeScreen can size the Swiper's own card box to match this
 // exactly - this component sizes itself regardless of whatever the Swiper
 // wrapper's box is, so the two drifting out of sync is what left a gap
 // above/below the actual visible card in earlier attempts to resize it
 // from the Swiper side alone.
-export const CARD_HEIGHT = height - 265 + 90 - 40;
+export const CARD_HEIGHT = height - 265 + 90 - 40 - 20;
 
 // Stock images for each category - same as CreateNewScreen.js
 const STOCK_IMAGES = {
