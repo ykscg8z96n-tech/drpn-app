@@ -13,6 +13,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="DRPN" />
 
+    <!-- Open Graph tags - without these, iOS's share sheet (and any
+         other link-preview consumer: iMessage, Slack, etc) has nothing
+         to show for a shared /join/CODE link and falls back to a
+         generic globe/compass icon instead of the actual app icon. -->
+    <meta property="og:title" content="DRPN" />
+    <meta property="og:description" content="Join events and groups on DRPN" />
+    <meta property="og:image" content="/icons/icon-512.png?v=2" />
+    <meta property="og:type" content="website" />
+
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */
