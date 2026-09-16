@@ -7,12 +7,12 @@ const Participation = require('../models/Participation');
 const Event = require('../models/Event');
 const User = require('../models/User');
 const Message = require('../models/Message');
-const { protect } = require('../middleware/auth');
+const { protect, requireVerified } = require('../middleware/auth');
 
 // @route   POST /api/private-connections/invite
 // @desc    Send private chat invite to another user
-// @access  Private
-router.post('/invite', [protect,
+// @access  Private (verified accounts only)
+router.post('/invite', [protect, requireVerified,
   body('toUserId').isMongoId().withMessage('Valid user ID required'),
   body('originEventId').isMongoId().withMessage('Valid event ID required'),
   body('message').optional().trim().isLength({ max: 500 }).withMessage('Message too long')
@@ -36,16 +36,16 @@ router.post('/invite', [protect,
     }
 
     // Check if both users are part of the same event - either as an
-    // accepted participant, or as its organizer (who never gets their own
-    // Participation record, since that's tracked on Event.organizer
-    // instead).
-    const event = await Event.findById(originEventId).select('organizer');
+    // accepted participant, or as one of its owners (an owner never gets
+    // their own Participation record, since they never had to apply to
+    // their own event/group - see Event.canUserManage).
+    const event = await Event.findById(originEventId).select('admins');
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
 
     const isPartOfEvent = async (userId) => {
-      if (event.organizer.toString() === userId) return true;
+      if (event.admins.some(id => id.toString() === userId)) return true;
       const participation = await Participation.findOne({
         event: originEventId,
         participant: userId,
@@ -437,7 +437,7 @@ router.post('/:id/rate', [protect,
 // @route   POST /api/private-connections/quick-invite
 // @desc    Quick invite from event roster (simplified)
 // @access  Private
-router.post('/quick-invite', [protect,
+router.post('/quick-invite', [protect, requireVerified,
   body('toUserId').isMongoId().withMessage('Valid user ID required'),
   body('originEventId').isMongoId().withMessage('Valid event ID required'),
   body('message').optional().trim().isLength({ max: 300 }).withMessage('Message too long')

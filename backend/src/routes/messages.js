@@ -140,6 +140,17 @@ router.post('/', [protect,
         });
       }
 
+      // Private (1:1) chats need the sender verified - no roster or
+      // shared-event context to fall back on if abused, unlike event/group
+      // chats. Doesn't apply to the bot's own notices, which are created
+      // directly (services/botNotice.js), not through this route.
+      if (!req.user.isVerified) {
+        return res.status(403).json({
+          success: false,
+          message: 'Get verified from your Profile to use private chats'
+        });
+      }
+
       console.log(`💬 Sending private message via connection: ${privateConnectionId}, user: ${req.user.id}`);
 
       // Verify user has access to this private chat
