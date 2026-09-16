@@ -242,14 +242,26 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.headerTitleText} numberOfLines={1}>
             {eventName || 'Chat'}
           </Text>
+          {getLifecycleBadge() && (
+            <View style={styles.lifecycleBadge}>
+              <Text style={styles.lifecycleBadgeText}>{getLifecycleBadge()}</Text>
+            </View>
+          )}
         </View>
+      ),
+      headerRight: () => (
+        !isOrganizer(user?.id) && (
+          <TouchableOpacity style={styles.headerLeaveButton} onPress={handleLeave}>
+            <Text style={styles.headerLeaveButtonText}>Leave</Text>
+          </TouchableOpacity>
+        )
       ),
       headerStyle: {
         backgroundColor: '#000000',
       },
       headerTintColor: '#FFFFFF',
     });
-  }, [navigation, eventName, eventData, eventType]);
+  }, [navigation, eventName, eventData, eventType, user?.id]);
 
   // Load messages on focus
   useFocusEffect(
@@ -397,6 +409,41 @@ export default function ChatScreen({ route, navigation }) {
 
   const isOrganizer = (userId) => {
     return eventData?.organizer === userId || eventData?.organizer?._id === userId;
+  };
+
+  // 'Closed' (organizer archived it) takes priority over 'Expired' (an
+  // event's date passed on its own) - both mean the same thing to
+  // someone reading the chat (this isn't active anymore), so only one
+  // badge ever needs to show.
+  const getLifecycleBadge = () => {
+    if (!eventData) return null;
+    if (eventData.isArchived) return 'Closed';
+    if (eventType === 'event' && eventData.eventDate && new Date(eventData.eventDate) < new Date()) {
+      return 'Expired';
+    }
+    return null;
+  };
+
+  const handleLeave = () => {
+    Alert.alert(
+      `Leave ${eventType === 'group' ? 'Group' : 'Event'}`,
+      `Leave "${eventName}"? You'll be removed from the roster and chat, and it won't show up in your LFG feed again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${finalChatId}/leave`);
+              navigation.navigate('MatchesMain', { initialTab: eventType === 'group' ? 'groups' : 'events' });
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to leave');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const formatEventInviteDate = (dateString) => {
@@ -716,6 +763,26 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     maxWidth: 180,
+  },
+  lifecycleBadge: {
+    backgroundColor: '#333333',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  lifecycleBadgeText: {
+    color: '#999999',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  headerLeaveButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  headerLeaveButtonText: {
+    color: '#E12112',
+    fontSize: 15,
+    fontWeight: '600',
   },
 
   // Loading & Error States

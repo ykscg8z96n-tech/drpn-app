@@ -411,7 +411,16 @@ export default function CreateEventScreen({ navigation }) {
       // they organize.
       const response = await api.get('/participations');
       const events = (response.data.data || [])
-        .filter(item => item.event && !item.event.isArchived)
+        .filter(item => {
+          if (!item.event || item.event.isArchived) return false;
+          // Events (not groups - they have no end date) drop off the
+          // Home tab once their date passes, same as an organizer
+          // closing one manually - the chat itself (Chats tab, driven
+          // by this same /participations data but without this filter)
+          // stays open either way.
+          if (item.event.type === 'event' && new Date(item.event.eventDate) < new Date()) return false;
+          return true;
+        })
         .map(item => {
           const isDirectOrganizer = item.event.organizer?._id === user?.id || item.event.organizer === user?.id;
           return {

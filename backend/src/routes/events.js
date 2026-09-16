@@ -170,6 +170,35 @@ async function postPrivateNotification(fromUserId, toUserId, originEventId, text
   await pushIfOffline(toUserId, { title: message.sender?.name || 'DRPN', body: text, url: '/' });
 }
 
+// A single persistent bot<->user DM per person, reused for every system
+// notice that doesn't belong in any specific event/group chat (an event
+// closing early, a group closing, etc) - rather than a one-off private
+// chat per notice. getOrCreatePrivateConnection already dedupes by the
+// participant pair, so every call here lands in the same thread. The
+// first time this fires for a given user, it leads with a welcome +
+// rules/verification/premium message, so that context exists before
+// the first "orphaned" notice ever shows up with nothing above it.
+async function sendBotNotice(toUserId, text, req) {
+  const botId = await getBotUserId();
+  const uids = [botId.toString(), toUserId.toString()].sort();
+  const chatId = `private-${uids[0]}-${uids[1]}`;
+  const existingCount = await Message.countDocuments({ chatType: 'private', chatId });
+  if (existingCount === 0) {
+    await postPrivateNotification(
+      botId,
+      toUserId,
+      null,
+      "Welcome to DRPN! A few quick things:\n\n" +
+      "• Be respectful - no harassment, spam, or scams. Violations can get you removed from events, groups, or the app.\n" +
+      "• Get Verified from your Profile to build trust with organizers.\n" +
+      "• Upgrade to Premium for extra super-swipes and rewinds.\n\n" +
+      "I'll drop a note here any time something changes with an event or group you're part of - like an organizer closing one early.",
+      req
+    );
+  }
+  await postPrivateNotification(botId, toUserId, null, text, req);
+}
+
 // A card/notification's recipient only needs a push if they don't
 // already have a live socket connection that'll show it in real time -
 // mirrors the same check in socketHandler.js's message:send.
@@ -1040,7 +1069,27 @@ router.delete('/:id', protect, async (req, res) => {
       isArchived: true,
       archivedAt: new Date()
     });
-    
+
+    // Tell the roster this closed - only actually news for an event if
+    // it's happening early (closing after the date already passed isn't
+    // a surprise to anyone); a group has no date, so closing it is
+    // always worth telling people, worded differently since there's no
+    // "early" concept for a group.
+    const isEarlyEventClose = event.type === 'event' && new Date(event.eventDate) > new Date();
+    if (isEarlyEventClose || event.type === 'group') {
+      try {
+        const rosterIds = event.applicants
+          .filter(a => a.status === 'accepted' && a.userId.toString() !== req.user.id)
+          .map(a => a.userId);
+        const noticeText = event.type === 'event'
+          ? `The organizer closed "${event.name}" before it happened. The chat is still open if you want to keep talking with the group.`
+          : `The organizer closed the group "${event.name}". The chat is still open if you want to keep talking or make new plans.`;
+        await Promise.all(rosterIds.map(userId => sendBotNotice(userId, noticeText, req)));
+      } catch (notifyError) {
+        console.error('⚠️ Failed to send close notices:', notifyError);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Event archived successfully'
