@@ -56,6 +56,13 @@ router.put('/profile', [protect,
       }
     });
 
+    // location.type ('Point') marks it as GeoJSON for the 2dsphere index -
+    // has to be restored explicitly since the client only ever sends the
+    // fields it actually collected (coordinates/address/city/state).
+    if (req.body.location) {
+      updateFields.location = { type: 'Point', ...req.body.location };
+    }
+
     // If birthDate is provided, also calculate and update age
     if (req.body.birthDate) {
       const today = new Date();

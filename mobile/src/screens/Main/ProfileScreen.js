@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
+import AddressAutocompleteInput from '../../components/AddressAutocompleteInput';
 
 const { width, height } = Dimensions.get('window');
 
@@ -57,14 +58,21 @@ export default function ProfileScreen({ navigation }) {
   const [editingBasics, setEditingBasics] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editingBirthday, setEditingBirthday] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
   const [tempName, setTempName] = useState('');
   const [tempBirthday, setTempBirthday] = useState('');
+  const [tempLocationText, setTempLocationText] = useState('');
+  const [tempLocationPlace, setTempLocationPlace] = useState(null);
+  const [savingLocation, setSavingLocation] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0); // New state for carousel
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -141,25 +149,22 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This permanently deletes your profile, photos, and connections. Events/groups you solely organize will be handed to another owner or archived. This can\'t be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Forever',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete('/users/me');
-              signOut();
-            } catch (error) {
-              Alert.alert('Error', error.response?.data?.message || 'Failed to delete account');
-            }
-          }
-        }
-      ]
-    );
+    setDeleteConfirmText('');
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') return;
+    setDeletingAccount(true);
+    try {
+      await api.delete('/users/me');
+      signOut();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to delete account');
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
+    }
   };
 
   const addPhoto = async () => {
@@ -369,6 +374,39 @@ export default function ProfileScreen({ navigation }) {
     if (success) {
       setEditingBasics(false);
       Alert.alert('Success', 'Bio updated!');
+    }
+  };
+
+  const startEditingLocation = () => {
+    setTempLocationText(profile?.location?.address || '');
+    setTempLocationPlace(null);
+    setEditingLocation(true);
+  };
+
+  const cancelLocationEdit = () => {
+    setTempLocationText('');
+    setTempLocationPlace(null);
+    setEditingLocation(false);
+  };
+
+  const saveLocationChanges = async () => {
+    if (!tempLocationPlace) {
+      Alert.alert('Pick a Suggestion', 'Choose an address from the dropdown so we have real coordinates for it.');
+      return;
+    }
+    setSavingLocation(true);
+    const success = await updateProfile({
+      location: {
+        coordinates: tempLocationPlace.coordinates,
+        address: tempLocationPlace.address,
+        city: tempLocationPlace.city,
+        state: tempLocationPlace.state,
+      }
+    });
+    setSavingLocation(false);
+    if (success) {
+      setEditingLocation(false);
+      Alert.alert('Success', 'Location updated!');
     }
   };
 
@@ -586,72 +624,79 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>My basics</Text>
         
         {/* Name Field */}
-        <View style={styles.editableInfoItem}>
-          <View style={styles.infoRow}>
+        <View style={styles.fieldSection}>
+          <View style={styles.fieldHeader}>
             <Ionicons name="person-outline" size={20} color="#666666" />
-            <View style={styles.inputContainer}>
-              {editingName ? (
-                <TextInput
-                  style={styles.editableInput}
-                  value={tempName}
-                  onChangeText={setTempName}
-                  placeholder="Enter your name"
-                  placeholderTextColor="#666666"
-                  autoFocus
-                />
-              ) : (
-                <Text style={styles.fieldValue}>{profile?.name || 'Add name'}</Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.editButtonContainer}>
+            <Text style={styles.infoLabel}>Name</Text>
             {editingName ? (
-              <>
-                <TouchableOpacity 
-                  style={styles.saveButton}
-                  onPress={saveNameChanges}
-                >
+              <TouchableOpacity style={styles.editButton} onPress={saveNameChanges}>
+                <Text style={styles.editButtonText}>Save</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.editButton} onPress={startEditingName}>
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {editingName ? (
+            <TextInput
+              style={styles.fieldBox}
+              value={tempName}
+              onChangeText={setTempName}
+              placeholder="Enter your name"
+              placeholderTextColor="#666666"
+              autoFocus
+            />
+          ) : (
+            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>{profile?.name || 'Add name'}</Text>
+          )}
+        </View>
+
+        {/* Birthday Field */}
+        <View style={styles.fieldSection}>
+          <View style={styles.fieldHeader}>
+            <Ionicons name="calendar-outline" size={20} color="#666666" />
+            <Text style={styles.infoLabel}>Birthday</Text>
+            {editingBirthday ? (
+              <View style={styles.editButtonContainer}>
+                <TouchableOpacity style={styles.cancelButton} onPress={cancelBirthdayEdit}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
                   <Text style={styles.saveButtonText}>Save</Text>
                 </TouchableOpacity>
-              </>
+              </View>
             ) : (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editButton}
-                onPress={startEditingName}
+                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
               >
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
-        </View>
-
-        {/* Birthday Field */}
-        <View style={styles.editableInfoItem}>
-          <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={20} color="#666666" />
-            <View style={styles.inputContainer}>
-              {editingBirthday ? (
-                Platform.OS === 'web' ? (
-                  <WebDateInput
-                    value={tempBirthday}
-                    onChange={setTempBirthday}
-                  />
-                ) : (
-                  <TextInput
-                    style={styles.fieldValue}
-                    value={tempBirthday}
-                    onChangeText={setTempBirthday}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#666666"
-                    autoFocus
-                  />
-                )
-              ) : (
-                <Text style={styles.fieldValue}>
-                  {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
-                </Text>
-              )}
-            </View>
+          {editingBirthday ? (
+            Platform.OS === 'web' ? (
+              <WebDateInput
+                value={tempBirthday}
+                onChange={setTempBirthday}
+                style={styles.fieldBox}
+              />
+            ) : (
+              <TextInput
+                style={styles.fieldBox}
+                value={tempBirthday}
+                onChangeText={setTempBirthday}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#666666"
+                autoFocus
+              />
+            )
+          ) : (
+            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>
+              {profile?.birthDate ? formatDateOnly(profile.birthDate) : 'Add birthday'}
+            </Text>
+          )}
 
           {/* @react-native-community/datetimepicker has no web implementation
               (no .web.js entry in the package - it silently does nothing when
@@ -685,36 +730,46 @@ export default function ProfileScreen({ navigation }) {
           )}
         </View>
 
-         <View style={styles.editButtonContainer}>
-            {editingBirthday ? (
-              <>
-                <TouchableOpacity style={styles.editButton} onPress={cancelBirthdayEdit}>
-                  <Text style={styles.editButtonText}>Cancel</Text>
+        {/* Location Field */}
+        <View style={styles.fieldSection}>
+          <View style={styles.fieldHeader}>
+            <Ionicons name="location-outline" size={20} color="#666666" />
+            <Text style={styles.infoLabel}>Location</Text>
+            {editingLocation ? (
+              <View style={styles.editButtonContainer}>
+                <TouchableOpacity style={styles.cancelButton} onPress={cancelLocationEdit}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={saveBirthdayChanges}>
-                  <Text style={styles.saveButtonText}>Save</Text>
+                <TouchableOpacity style={styles.saveButton} onPress={saveLocationChanges} disabled={savingLocation}>
+                  {savingLocation ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
                 </TouchableOpacity>
-              </>
+              </View>
             ) : (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => (Platform.OS === 'web' ? startEditingBirthday() : setShowDatePicker(true))}
-              >
+              <TouchableOpacity style={styles.editButton} onPress={startEditingLocation}>
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
+          {editingLocation ? (
+            <AddressAutocompleteInput
+              value={tempLocationText}
+              placeholder="Search a city or address"
+              onChangeText={setTempLocationText}
+              onSelectPlace={(place) => {
+                setTempLocationText(place.address);
+                setTempLocationPlace(place);
+              }}
+            />
+          ) : (
+            <Text style={[styles.fieldBox, styles.fieldBoxDisabled]}>
+              {profile?.location?.address || 'Add location'}
+            </Text>
+          )}
         </View>
-
-        {/* Location Field */}
-        <TouchableOpacity 
-          style={styles.infoItem}
-          onPress={() => Alert.alert('Edit Location', 'Location editing will be available soon')}
-        >
-          <Ionicons name="location-outline" size={20} color="#666666" />
-          <Text style={styles.infoLabel}>Location</Text>
-          <Text style={styles.infoValue}>{profile?.location?.address || 'Add location'}</Text>
-        </TouchableOpacity>
 
         {/* About - Multi-line input */}
         <View style={styles.aboutSection}>
@@ -833,6 +888,54 @@ export default function ProfileScreen({ navigation }) {
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={styles.saveButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
+    <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+      <View style={styles.passwordModalOverlay}>
+        <View style={styles.passwordModalSheet}>
+          <Text style={styles.passwordModalTitle}>Delete Account</Text>
+          <Text style={styles.deleteConfirmText}>
+            This permanently deletes your profile, photos, and connections. Events/groups you
+            solely organize will be handed to another owner or archived. This can't be undone.
+          </Text>
+          <Text style={styles.deleteConfirmLabel}>Type DELETE to confirm</Text>
+          <TextInput
+            style={styles.passwordModalInput}
+            value={deleteConfirmText}
+            onChangeText={setDeleteConfirmText}
+            placeholder="DELETE"
+            placeholderTextColor="#666666"
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+
+          <View style={styles.passwordModalButtons}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => {
+                setShowDeleteConfirm(false);
+                setDeleteConfirmText('');
+              }}
+            >
+              <Text style={styles.editButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.deleteConfirmButton,
+                deleteConfirmText.trim().toUpperCase() !== 'DELETE' && styles.deleteConfirmButtonDisabled
+              ]}
+              onPress={confirmDeleteAccount}
+              disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deletingAccount}
+            >
+              {deletingAccount ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Delete Forever</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1284,8 +1387,35 @@ const styles = StyleSheet.create({
     marginLeft: 32, // Align with text after icon
   },
   aboutInputDisabled: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
+    color: '#999999',
+  },
+
+  // Shared "field card" look used by Name/Birthday/Location, matching
+  // the About section's boxed style so every editable field on this
+  // screen looks the same whether it's being edited or not.
+  fieldSection: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A1A',
+  },
+  fieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 0,
+  },
+  fieldBox: {
+    borderWidth: 1,
+    borderColor: '#333333',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginLeft: 32,
+  },
+  fieldBoxDisabled: {
     color: '#999999',
   },
 
@@ -1638,5 +1768,26 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     marginTop: 4,
+  },
+  deleteConfirmText: {
+    color: '#C7C4C4',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  deleteConfirmLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  deleteConfirmButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FF3B30',
+    borderRadius: 16,
+  },
+  deleteConfirmButtonDisabled: {
+    backgroundColor: '#5C2A26',
   },
 });
