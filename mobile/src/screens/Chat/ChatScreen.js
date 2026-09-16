@@ -910,6 +910,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     textAlignVertical: 'center',
+    minHeight: 20,
+    maxHeight: 84,
+    outlineStyle: 'none',
   },
   sendButton: {
     width: 36,
