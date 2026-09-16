@@ -282,24 +282,26 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
             <View style={styles.centerSection}>
               <View style={styles.contentRow}>
                 <View style={styles.titleSection}>
-                  <View style={[styles.sportBadge, { backgroundColor: getBadgeColor(item) }]}>
-                    <Ionicons name={getBadgeIcon(item)} size={12} color="white" />
-                    <Text style={styles.sportBadgeText}>
-                      {getBadgeLabel(item)}
-                    </Text>
+                  <View style={styles.badgeRow}>
+                    <View style={[styles.sportBadge, { backgroundColor: getBadgeColor(item) }]}>
+                      <Ionicons name={getBadgeIcon(item)} size={12} color="white" />
+                      <Text style={styles.sportBadgeText}>
+                        {getBadgeLabel(item)}
+                      </Text>
+                    </View>
+                    {item.role && (
+                      <View style={styles.roleBadge}>
+                        <Ionicons name="star" size={10} color="#FFD700" />
+                        <Text style={styles.roleBadgeText}>
+                          {item.role === 'organizer' ? 'Organizer' : 'Owner'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  
+
                   <Text style={styles.eventItemName} numberOfLines={2}>
                     {item.name}
                   </Text>
-                  {item.role && (
-                    <View style={styles.roleBadge}>
-                      <Ionicons name="star" size={10} color="#FFD700" />
-                      <Text style={styles.roleBadgeText}>
-                        {item.role === 'organizer' ? 'Organizer' : 'Owner'}
-                      </Text>
-                    </View>
-                  )}
                 </View>
 
                 {/* Right Section - Date and Location (in content row) */}
@@ -1027,7 +1029,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginBottom: 8,
     alignSelf: 'flex-start',
   },
   sportBadgeText: {
@@ -1045,6 +1046,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 20,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1053,8 +1060,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    marginTop: 4,
-    alignSelf: 'flex-start',
   },
   roleBadgeText: {
     fontSize: 10,

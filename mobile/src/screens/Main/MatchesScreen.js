@@ -119,19 +119,18 @@ const MatchItem = ({ item, onPress }) => {
         <View style={styles.centerSection}>
           <View style={styles.contentRow}>
             <View style={styles.nameSection}>
-              {/* Category badge and title */}
-              {item.category && (
-                <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
-                  <Text style={styles.categoryText}>
-                    {item.category.toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.nameRow}>
-                <Text style={styles.matchName} numberOfLines={1}>
-                  {item.name}
-                </Text>
+              {/* Category, role (organizer/owner) and category badges share
+                  one row - role used to sit next to the name instead,
+                  which read as attached to the title rather than as a
+                  status pill alongside the category. */}
+              <View style={styles.badgeRow}>
+                {item.category && (
+                  <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}>
+                    <Text style={styles.categoryText}>
+                      {item.category.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 {(item.role === 'organizer' || item.role === 'owner') && (
                   <View style={styles.roleBadge}>
                     <Ionicons name="star" size={10} color="#FFD700" />
@@ -140,6 +139,12 @@ const MatchItem = ({ item, onPress }) => {
                     </Text>
                   </View>
                 )}
+              </View>
+
+              <View style={styles.nameRow}>
+                <Text style={styles.matchName} numberOfLines={1}>
+                  {item.name}
+                </Text>
                 {item.lifecycleBadge && (
                   <View style={styles.lifecycleBadge}>
                     <Text style={styles.lifecycleBadgeText}>{item.lifecycleBadge}</Text>
@@ -583,13 +588,18 @@ const styles = StyleSheet.create({
   },
   
   // Category Badge
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginBottom: 8,
     alignSelf: 'flex-start',
   },
   categoryText: {
