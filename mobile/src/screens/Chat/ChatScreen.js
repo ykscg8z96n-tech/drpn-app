@@ -419,15 +419,14 @@ export default function ChatScreen({ route, navigation }) {
     return eventData?.organizer === userId || eventData?.organizer?._id === userId;
   };
 
-  // 'Closed' (organizer archived it) takes priority over 'Expired' (an
-  // event's date passed on its own) - both mean the same thing to
-  // someone reading the chat (this isn't active anymore), so only one
-  // badge ever needs to show.
+  // A cancelled event/group is removed from every roster member's feed
+  // entirely, so this chat is only still reachable here if it's either
+  // still active or "completed" - its date passed on its own without
+  // anyone cancelling it.
   const getLifecycleBadge = () => {
     if (!eventData) return null;
-    if (eventData.isArchived) return 'Closed';
     if (eventType === 'event' && eventData.eventDate && new Date(eventData.eventDate) < new Date()) {
-      return 'Expired';
+      return 'Completed';
     }
     return null;
   };

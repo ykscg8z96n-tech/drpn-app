@@ -1087,9 +1087,8 @@ router.delete('/:id', protect, async (req, res) => {
         { isArchived: true }
       );
 
-      const noticeText = event.type === 'event'
-        ? `The organizer closed "${event.name}". The chat is now closed.`
-        : `The organizer closed the group "${event.name}". The chat is now closed.`;
+      const noun = event.type === 'group' ? 'group' : 'event';
+      const noticeText = `${req.user.name || 'The organizer'} has cancelled the ${noun} "${event.name}"`;
       await Promise.all(rosterIds.map(userId => sendBotNotice(userId, noticeText, req)));
     } catch (notifyError) {
       console.error('⚠️ Failed to close roster chat access / send close notices:', notifyError);
@@ -1097,7 +1096,7 @@ router.delete('/:id', protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Event archived successfully'
+      message: 'Event cancelled successfully'
     });
   } catch (error) {
     console.error(error);

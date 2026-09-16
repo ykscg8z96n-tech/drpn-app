@@ -14,7 +14,7 @@ const SECTIONS = [
     icon: 'add-circle',
     color: '#0078FF',
     title: 'Home',
-    body: 'Create your own events (one-time) or groups (ongoing) under the Events/Groups tabs. Swipe an item left to reveal Roster, Edit, Invite, and Archive if you organize it.',
+    body: 'Create your own events (one-time) or groups (ongoing) under the Events/Groups tabs. Swipe an item left to reveal Roster, Edit, Invite, and Close if you organize it.',
   },
   {
     icon: 'people',
