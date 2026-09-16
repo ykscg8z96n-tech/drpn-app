@@ -13,7 +13,7 @@ const MIN_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 150;
 const DEFAULT_RADIUS_KM = 25;
 
-export default function LocationFilterModal({ visible, onClose, onApply, initialLocation, deviceLocation }) {
+export default function LocationFilterModal({ visible, onClose, onApply, onClear, initialLocation, deviceLocation }) {
   const [selected, setSelected] = useState(null); // { latitude, longitude, label }
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
   const [query, setQuery] = useState('');
@@ -131,6 +131,11 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
         <TouchableOpacity style={styles.applyButton} onPress={handleApply} disabled={!selected}>
           <Text style={styles.applyButtonText}>Apply</Text>
         </TouchableOpacity>
+        {onClear && initialLocation && (
+          <TouchableOpacity style={styles.clearButton} onPress={onClear}>
+            <Text style={styles.clearButtonText}>Clear - use my current location</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Modal>
   );
@@ -228,5 +233,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  clearButton: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#999999',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
