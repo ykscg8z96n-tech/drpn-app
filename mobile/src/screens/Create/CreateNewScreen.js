@@ -1,5 +1,6 @@
 // mobile/src/screens/Create/CreateNewScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -122,8 +123,19 @@ export default function CreateNewScreen({ route, navigation }) {
 
   useEffect(() => {
     getCurrentLocationCoordinates();
-    loadMyGroups();
   }, []);
+
+  // Refetch every time this screen gains focus, not just on first mount -
+  // this screen stays mounted in the nav stack between visits (e.g.
+  // creating group A, going back, then reopening it to create group B or
+  // an event that invites A), so a plain mount-only fetch would leave
+  // myGroups stale and silently miss a just-created group from the
+  // invite picker.
+  useFocusEffect(
+    useCallback(() => {
+      loadMyGroups();
+    }, [])
+  );
 
   const loadMyGroups = async () => {
     try {
