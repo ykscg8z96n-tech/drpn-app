@@ -570,18 +570,6 @@ export default function SwipeScreen({ navigation }) {
           >
             <Ionicons name="heart" size={18} color="#FFFFFF" />
           </Animated.View>
-          {/* TEMP DEBUG - remove once the card sizing is confirmed right.
-              Shows the real measured/computed numbers instead of guessing
-              at them blind. */}
-          <View pointerEvents="none" style={{ position: 'absolute', top: 4, left: 4, backgroundColor: 'rgba(255,0,0,0.85)', padding: 6, borderRadius: 6, zIndex: 999 }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: 'monospace' }}>
-              windowHeight: {windowHeight}{'\n'}
-              cardAreaHeight: {cardAreaHeight === null ? 'null (not measured yet)' : cardAreaHeight}{'\n'}
-              computedCardHeight: {computedCardHeight}{'\n'}
-              buttonRowHeight: {buttonRowHeight}{'\n'}
-              CARD_HEIGHT (fallback): {CARD_HEIGHT}
-            </Text>
-          </View>
           <Swiper
             ref={swiperRef}
             cards={events}
