@@ -353,6 +353,14 @@ export default function EditEventScreen({ route, navigation }) {
             />
           </View>
 
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Category</Text>
+            {event.type === 'group' && (
+              <Text style={styles.helperText}>Select one or more categories</Text>
+            )}
+            {renderCategories()}
+          </View>
+
           {/* Event Photo Picker */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Event Photo</Text>
@@ -465,14 +473,6 @@ export default function EditEventScreen({ route, navigation }) {
                 </Text>
               </View>
             )}
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Category</Text>
-            {event.type === 'group' && (
-              <Text style={styles.helperText}>Select one or more categories</Text>
-            )}
-            {renderCategories()}
           </View>
 
           {event.type === 'event' && (
