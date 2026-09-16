@@ -227,7 +227,7 @@ const SwipeableEventItem = ({ item, onArchive, onEdit, onViewApplicants, onInvit
                   onPress={() => onArchive(item)}
                 >
                   <Ionicons name="close-circle-outline" size={24} color="white" />
-                  <Text style={styles.archiveButtonText}>Close</Text>
+                  <Text style={styles.archiveButtonText}>Cancel</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -499,12 +499,12 @@ export default function CreateEventScreen({ navigation }) {
   const handleArchiveEvent = (event) => {
     const noun = event.type === 'group' ? 'Group' : 'Event';
     Alert.alert(
-      `Close ${noun}`,
+      `Cancel ${noun}`,
       `Cancel "${event.name}"? It'll disappear from everyone's feed, and the roster will be notified.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Back', style: 'cancel' },
         {
-          text: 'Close',
+          text: 'Cancel',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -512,7 +512,7 @@ export default function CreateEventScreen({ navigation }) {
               setMyEvents(prev => prev.filter(e => e._id !== event._id));
               Alert.alert('Success', `${noun} cancelled successfully`);
             } catch (error) {
-              Alert.alert('Error', `Failed to close ${noun.toLowerCase()}`);
+              Alert.alert('Error', `Failed to cancel ${noun.toLowerCase()}`);
             }
           }
         }
