@@ -1362,7 +1362,41 @@ router.post('/:id/accept-transfer-ownership', protect, async (req, res) => {
     if (!event.admins.some(id => id.toString() === previousOrganizer.toString())) {
       event.admins.push(previousOrganizer);
     }
+    // The organizer was never a roster member (organizers don't apply to
+    // their own event) - admins alone doesn't grant chat/roster access,
+    // that's gated on being the organizer OR having an accepted
+    // Participation record. Without this, stepping down from organizer
+    // to admin left them with no trace in either place: not shown on the
+    // roster, "Not authorized" opening the event/group chat.
+    if (!event.applicants.some(a => a.userId.toString() === previousOrganizer.toString())) {
+      event.applicants.push({
+        userId: previousOrganizer,
+        status: 'accepted',
+        appliedAt: new Date(),
+        respondedAt: new Date()
+      });
+    }
     await event.save();
+
+    const existingParticipation = await Participation.findOne({
+      event: event._id,
+      participant: previousOrganizer
+    });
+    if (!existingParticipation) {
+      await Participation.create({
+        event: event._id,
+        participant: previousOrganizer,
+        status: 'accepted',
+        joinMethod: 'ownership_transfer',
+        acceptedBy: req.user.id,
+        acceptedAt: new Date(),
+        isArchived: false
+      });
+    } else if (existingParticipation.isArchived) {
+      existingParticipation.isArchived = false;
+      existingParticipation.status = 'accepted';
+      await existingParticipation.save();
+    }
 
     if (req.body.messageId) {
       await Message.updateOne(
@@ -1491,6 +1525,64 @@ router.post('/:id/kick', protect, async (req, res) => {
     res.json({ success: true, message: 'Removed from roster' });
   } catch (error) {
     console.error('Error in kick:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/events/:id/leave
+// @desc    A roster member voluntarily leaves an event/group. Mirrors
+//          kick's cleanup (this is "kick yourself"), plus records a
+//          'pass' swipe so the event doesn't come back around in their
+//          LFG feed - without that, leaving would just look like a fresh
+//          unswiped event again the next time they browse.
+// @access  Private
+router.post('/:id/leave', protect, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    if (event.organizer.toString() === userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'The organizer can\'t leave - transfer ownership to someone else first'
+      });
+    }
+
+    const applicantIndex = event.applicants.findIndex(a => a.userId.toString() === userId);
+    if (applicantIndex === -1) {
+      return res.status(404).json({ success: false, message: 'You are not on this roster' });
+    }
+    const wasAccepted = event.applicants[applicantIndex].status === 'accepted';
+    event.applicants.splice(applicantIndex, 1);
+    event.admins = event.admins.filter(id => id.toString() !== userId);
+    if (wasAccepted && event.type === 'event') {
+      event.currentAttendees = Math.max(0, (event.currentAttendees || 0) - 1);
+    }
+    await event.save();
+
+    const user = await User.findById(userId);
+    await User.findByIdAndUpdate(userId, { $pull: { eventsJoined: { eventId: event._id } } });
+    if (wasAccepted) {
+      await Match.deleteOne({ individual: userId, event: event._id });
+      await Participation.deleteOne({ event: event._id, participant: userId });
+    }
+    // Mark it passed for this user specifically - addSwipe overwrites any
+    // existing swipe on this event (the 'like' from when they applied),
+    // it doesn't just add a second one.
+    user.addSwipe(event._id, 'pass');
+    await user.save();
+
+    try {
+      await postSystemAnnouncement(event, `${user.name || 'Someone'} left "${event.name}"`, req);
+    } catch (announceError) {
+      console.error('⚠️ Failed to post leave announcement:', announceError);
+    }
+
+    res.json({ success: true, message: 'Left the roster' });
+  } catch (error) {
+    console.error('Error in leave:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

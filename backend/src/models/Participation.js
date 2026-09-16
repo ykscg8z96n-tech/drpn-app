@@ -26,7 +26,7 @@ const participationSchema = new mongoose.Schema({
   // How this participation was created
   joinMethod: {
     type: String,
-    enum: ['swipe_application', 'invite_code', 'direct_invite'],
+    enum: ['swipe_application', 'invite_code', 'direct_invite', 'ownership_transfer'],
     required: true
   },
   

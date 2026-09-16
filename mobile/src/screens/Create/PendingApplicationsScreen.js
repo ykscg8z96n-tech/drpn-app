@@ -35,6 +35,7 @@ const UserItem = ({
   onViewProfile,
   onOpenActions,
   onStepDown,
+  onLeave,
 }) => {
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?';
@@ -113,12 +114,22 @@ const UserItem = ({
               ) : (
                 <View style={styles.rowActions}>
                   {isSelf ? (
-                    /* Only an owner (not the organizer) can step down, and
-                       only from their own row. */
-                    isTargetOwner && !user.isEventOrganizer && (
-                      <TouchableOpacity style={styles.stepDownButton} onPress={onStepDown}>
-                        <Text style={styles.stepDownButtonText}>Step Down</Text>
-                      </TouchableOpacity>
+                    /* The organizer can't leave at all (has to transfer
+                       ownership first) or step down (there'd be no
+                       organizer left) - everyone else gets Leave, and an
+                       owner also gets Step Down for giving up just the
+                       owner role while staying on the roster. */
+                    !user.isEventOrganizer && (
+                      <>
+                        {isTargetOwner && (
+                          <TouchableOpacity style={styles.stepDownButton} onPress={onStepDown}>
+                            <Text style={styles.stepDownButtonText}>Step Down</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={styles.stepDownButton} onPress={onLeave}>
+                          <Text style={styles.stepDownButtonText}>Leave</Text>
+                        </TouchableOpacity>
+                      </>
                     )
                   ) : (
                     <>
@@ -420,6 +431,28 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     );
   };
 
+  const handleLeave = () => {
+    Alert.alert(
+      `Leave ${event.type === 'group' ? 'Group' : 'Event'}`,
+      `Leave "${event.name}"? You'll be removed from the roster and chat, and it won't show up in your LFG feed again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/events/${event._id}/leave`);
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to leave');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleTransferOwnership = (userData) => {
     Alert.alert(
       'Transfer Ownership',
@@ -537,6 +570,7 @@ export default function PendingApplicationsScreen({ route, navigation }) {
                 onViewProfile={handleViewProfile}
                 onOpenActions={setActionMenuUser}
                 onStepDown={handleStepDown}
+                onLeave={handleLeave}
               />
             ))
           ) : (
