@@ -37,7 +37,7 @@ const formatBirthday = (dateString) => {
 };
 
 export default function ProfileScreen({ navigation }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateUser } = useAuth();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -238,6 +238,24 @@ export default function ProfileScreen({ navigation }) {
       console.error('Error updating profile:', error);
       Alert.alert('Error', 'Failed to update profile');
       return false;
+    }
+  };
+
+  // No real verification check yet - this just flips the flag. Gates
+  // creating a public event/group and using private (1:1) chats (see
+  // requireVerified middleware / POST /events isPublic check).
+  const handleGetVerified = async () => {
+    try {
+      const response = await api.post('/users/verify');
+      setProfile(response.data.data);
+      // Merge rather than replace - the AuthContext user object uses a
+      // different, narrower shape (id vs _id, etc) than the full profile
+      // doc this endpoint returns, and other screens rely on those
+      // existing fields staying intact.
+      updateUser({ ...user, isVerified: true });
+      Alert.alert('Verified', "You're verified! Public events/groups and private chats are now unlocked.");
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to verify');
     }
   };
 
@@ -646,6 +664,32 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Verification - one-way action, not an editable value, so no
+            Edit/Cancel/Save cycle like the other fields, just a button
+            that's gone once verified. */}
+        <View style={styles.editableInfoItem}>
+          <View style={styles.infoRow}>
+            <Ionicons name="shield-checkmark-outline" size={20} color="#666666" />
+            <View style={styles.inputContainer}>
+              <View style={styles.verifiedRow}>
+                <Text style={styles.fieldValue}>
+                  {profile?.isVerified ? 'Verified' : 'Not verified'}
+                </Text>
+                {profile?.isVerified && (
+                  <Ionicons name="checkmark-circle" size={16} color="#0078FF" />
+                )}
+              </View>
+            </View>
+          </View>
+          {!profile?.isVerified && (
+            <View style={styles.editButtonContainer}>
+              <TouchableOpacity style={styles.editButton} onPress={handleGetVerified}>
+                <Text style={styles.editButtonText}>Get Verified</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         {/* Birthday Field - matches Name/Location: plain text + Edit
             button until tapped. DateTimeInput renders in controlled
             mode here (visible/onRequestClose), so it shows no field
@@ -979,10 +1023,15 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Profile Info */}
         <View style={styles.previewContent}>
-          <Text style={styles.previewName}>
-            {profile?.name || 'Your Name'}
-          </Text>
-          
+          <View style={styles.verifiedRow}>
+            <Text style={styles.previewName}>
+              {profile?.name || 'Your Name'}
+            </Text>
+            {profile?.isVerified && (
+              <Ionicons name="checkmark-circle" size={18} color="#0078FF" />
+            )}
+          </View>
+
           {userAge && (
             <Text style={styles.previewAge}>
               {userAge} years old
@@ -1267,6 +1316,11 @@ const styles = StyleSheet.create({
   fieldValue: {
     fontSize: 16,
     color: '#FFFFFF',
+  },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   editableInput: {
     fontSize: 16,
