@@ -15,8 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import WebDateInput, { toDateOnlyString } from '../../components/WebDateInput';
+import DateTimeInput from '../../components/DateTimeInput';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,7 +48,6 @@ export default function EditEventScreen({ route, navigation }) {
   const { event } = route.params; // Get the event to edit
   const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [location, setLocation] = useState(null);
 
   const [myGroups, setMyGroups] = useState([]);
@@ -478,58 +476,12 @@ export default function EditEventScreen({ route, navigation }) {
           {event.type === 'event' && (
             <>
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Event Date</Text>
-                <View style={styles.datePickerWrapper}>
-                  {Platform.OS === 'web' ? (
-                    <WebDateInput
-                      value={toDateOnlyString(formData.eventDate)}
-                      onChange={(dateString) => {
-                        if (dateString) {
-                          setFormData({ ...formData, eventDate: new Date(`${dateString}T00:00:00`) });
-                        }
-                      }}
-                    />
-                  ) : Platform.OS === 'ios' ? (
-                    <DateTimePicker
-                      value={formData.eventDate}
-                      mode="date"
-                      display="compact"
-                      onChange={(event, selectedDate) => {
-                        if (selectedDate && event.type !== 'dismissed') {
-                          setFormData({ ...formData, eventDate: selectedDate });
-                        }
-                      }}
-                      minimumDate={new Date()}
-                      style={styles.inlineDatePicker}
-                      themeVariant="dark"
-                    />
-                  ) : (
-                    // Android: Use TouchableOpacity with better styling
-                    <TouchableOpacity
-                      style={styles.androidDateButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <View style={styles.dateDisplayContainer}>
-                        <Ionicons name="calendar" size={24} color="#0078FF" />
-                        <View style={styles.dateTextContainer}>
-                          <Text style={styles.dateDisplayText}>
-                            {formData.eventDate.toLocaleDateString('en-US', {
-                              month: 'long',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </Text>
-                          <Text style={styles.dateDisplayDay}>
-                            {formData.eventDate.toLocaleDateString('en-US', {
-                              weekday: 'long'
-                            })}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-down" size={20} color="#999999" />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                <Text style={styles.label}>Event Date & Time</Text>
+                <DateTimeInput
+                  value={formData.eventDate}
+                  onChange={(date) => setFormData({ ...formData, eventDate: date })}
+                  minimumDate={new Date()}
+                />
               </View>
 
               <View style={styles.inputContainer}>
@@ -719,21 +671,6 @@ export default function EditEventScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Date Picker Modal - For Android */}
-      {showDatePicker && Platform.OS === 'android' && (
-        <DateTimePicker
-          value={formData.eventDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(false);
-            if (selectedDate && event.type !== 'dismissed') {
-              setFormData({ ...formData, eventDate: selectedDate });
-            }
-          }}
-          minimumDate={new Date()}
-        />
-      )}
     </KeyboardAvoidingView>
   );
 }
