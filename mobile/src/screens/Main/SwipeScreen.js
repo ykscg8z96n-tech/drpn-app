@@ -504,6 +504,7 @@ export default function SwipeScreen({ navigation }) {
           visible={showLocationFilter}
           onClose={closeLocationFilter}
           onApply={(location) => { setBrowseLocation(location); closeLocationFilter(); }}
+          onClear={() => { clearBrowseLocation(); closeLocationFilter(); }}
           initialLocation={browseLocation}
           deviceLocation={userLocation}
         />
@@ -828,6 +829,7 @@ export default function SwipeScreen({ navigation }) {
         visible={showLocationFilter}
         onClose={closeLocationFilter}
         onApply={(location) => { setBrowseLocation(location); closeLocationFilter(); }}
+        onClear={() => { clearBrowseLocation(); closeLocationFilter(); }}
         initialLocation={browseLocation}
         deviceLocation={userLocation}
       />

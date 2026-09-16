@@ -65,7 +65,7 @@ function ensureLeafletCss() {
   document.head.appendChild(override);
 }
 
-export default function LocationFilterModal({ visible, onClose, onApply, initialLocation, deviceLocation }) {
+export default function LocationFilterModal({ visible, onClose, onApply, onClear, initialLocation, deviceLocation }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const circleRef = useRef(null);
@@ -274,6 +274,11 @@ export default function LocationFilterModal({ visible, onClose, onApply, initial
         <TouchableOpacity style={styles.applyButton} onPress={handleApply} disabled={!center}>
           <Text style={styles.applyButtonText}>Apply</Text>
         </TouchableOpacity>
+        {onClear && initialLocation && (
+          <TouchableOpacity style={styles.clearButton} onPress={onClear}>
+            <Text style={styles.clearButtonText}>Clear - use my current location</Text>
+          </TouchableOpacity>
+        )}
       </View>
       <style>{sliderThumbCss}</style>
     </Modal>
@@ -466,5 +471,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  clearButton: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#999999',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
