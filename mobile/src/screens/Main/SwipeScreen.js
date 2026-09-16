@@ -489,7 +489,7 @@ export default function SwipeScreen({ navigation }) {
                       {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
                     </Text>
                     {browseLocation && (
-                      <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="close-circle" size={16} color="#999999" />
                       </TouchableOpacity>
                     )}
@@ -519,7 +519,7 @@ export default function SwipeScreen({ navigation }) {
             <Text style={styles.locationBannerText} numberOfLines={1}>
               Browsing {browseLocation.label} · {browseLocation.radiusKm}km
             </Text>
-            <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close-circle" size={16} color="#999999" />
             </TouchableOpacity>
           </TouchableOpacity>
@@ -813,7 +813,7 @@ export default function SwipeScreen({ navigation }) {
                     {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
                   </Text>
                   {browseLocation && (
-                    <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle" size={16} color="#999999" />
                     </TouchableOpacity>
                   )}
