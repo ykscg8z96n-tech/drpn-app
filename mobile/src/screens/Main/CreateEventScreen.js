@@ -504,7 +504,7 @@ export default function CreateEventScreen({ navigation }) {
     const noun = event.type === 'group' ? 'group' : 'event';
     Alert.alert(
       'Step Down',
-      `Hand off "${event.name}" to an existing owner and leave? You won't be on the roster anymore.`,
+      `Hand off "${event.name}" to an existing owner? You'll stay on the roster as a regular member.`,
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -513,8 +513,8 @@ export default function CreateEventScreen({ navigation }) {
           onPress: async () => {
             try {
               await api.post(`/events/${event._id}/organizer-step-down`);
-              setMyEvents(prev => prev.filter(e => e._id !== event._id));
-              Alert.alert('Success', `You stepped down and left the ${noun}`);
+              await loadMyEvents();
+              Alert.alert('Success', `You stepped down and are now a member of the ${noun}`);
             } catch (error) {
               Alert.alert('Error', error.response?.data?.message || `Failed to step down`);
             }
