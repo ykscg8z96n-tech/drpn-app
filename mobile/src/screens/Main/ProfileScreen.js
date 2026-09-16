@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -64,6 +65,7 @@ export default function ProfileScreen({ navigation }) {
   const [tempLocationText, setTempLocationText] = useState('');
   const [tempLocationPlace, setTempLocationPlace] = useState(null);
   const [savingLocation, setSavingLocation] = useState(false);
+  const [deviceBiasLocation, setDeviceBiasLocation] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0); // New state for carousel
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -381,6 +383,19 @@ export default function ProfileScreen({ navigation }) {
     setTempLocationText(profile?.location?.address || '');
     setTempLocationPlace(null);
     setEditingLocation(true);
+
+    // Bias search results toward the device's current position, not just
+    // whatever's already saved - the common case is someone setting their
+    // location for the FIRST time, when there's nothing saved yet to bias
+    // against at all.
+    if (!deviceBiasLocation) {
+      Location.getCurrentPositionAsync({}).then((location) => {
+        setDeviceBiasLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      }).catch(() => {});
+    }
   };
 
   const cancelLocationEdit = () => {
@@ -751,10 +766,10 @@ export default function ProfileScreen({ navigation }) {
                     setTempLocationPlace(place);
                   }}
                   showIcon={false}
-                  biasLocation={profile?.location?.coordinates ? {
+                  biasLocation={deviceBiasLocation || (profile?.location?.coordinates ? {
                     latitude: profile.location.coordinates[1],
                     longitude: profile.location.coordinates[0],
-                  } : null}
+                  } : null)}
                 />
               ) : (
                 <Text style={styles.fieldValue}>{profile?.location?.address || 'Add location'}</Text>
