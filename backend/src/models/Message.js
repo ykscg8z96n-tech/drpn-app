@@ -254,14 +254,22 @@ messageSchema.statics.getPrivateMessages = function(privateConnectionId, limit =
     .limit(limit);
 };
 
-// Static method to get unread count for user in specific chat
-messageSchema.statics.getUnreadCount = function(chatType, chatId, userId) {
-  return this.countDocuments({
+// Static method to get unread count for user in specific chat. `since`
+// (a join/accepted timestamp) excludes messages sent before the user was
+// even part of the chat - without it, someone who just joined a group
+// with months of history would see every message that predates them as
+// "unread".
+messageSchema.statics.getUnreadCount = function(chatType, chatId, userId, since = null) {
+  const query = {
     chatType,
     chatId,
     sender: { $ne: userId },
     'readBy.user': { $ne: userId }
-  });
+  };
+  if (since) {
+    query.timestamp = { $gte: since };
+  }
+  return this.countDocuments(query);
 };
 
 // Static method to mark all messages as read for user in chat

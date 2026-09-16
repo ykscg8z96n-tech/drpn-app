@@ -140,7 +140,7 @@ router.get('/', protect, async (req, res) => {
       const eventDoc = item.event;
       if (!eventDoc) return;
       const chatId = `${eventDoc.type}-${eventDoc._id}`;
-      item.unreadCount = await Message.getUnreadCount(eventDoc.type, chatId, req.user.id);
+      item.unreadCount = await Message.getUnreadCount(eventDoc.type, chatId, req.user.id, item.acceptedAt);
     }));
 
     console.log(`📊 Total ${type || 'all'} items for user: ${allItems.length}`);

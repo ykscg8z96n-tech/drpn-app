@@ -543,7 +543,7 @@ router.get('/unread-count', protect, async (req, res) => {
     const eventUnread = (await Promise.all(participations.map(p => {
       if (!p.event) return 0;
       const chatId = `${p.event.type}-${p.event._id}`;
-      return Message.getUnreadCount(p.event.type, chatId, req.user.id);
+      return Message.getUnreadCount(p.event.type, chatId, req.user.id, p.acceptedAt);
     }))).reduce((total, count) => total + count, 0);
 
     // Get private chat unread counts
