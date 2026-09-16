@@ -72,7 +72,7 @@ export default function CreateNewScreen({ route, navigation }) {
    groupSize:  type === 'group' ? '' : undefined,    // only for groups
    isRecurring:       false,
    recurringPattern:  'weekly',
-   isPublic:          true,
+   isPublic:          !!user?.isVerified,
    type,  // same as type: type
   });
 
@@ -172,6 +172,10 @@ export default function CreateNewScreen({ route, navigation }) {
 
   const handleSubmit = async () => {
     // Validation
+    if (formData.isPublic && !user?.isVerified) {
+      Alert.alert('Get Verified', 'Only verified accounts can create a public event or group. Get verified from your Profile.');
+      return;
+    }
     if (!formData.name.trim()) {
       Alert.alert('Error', 'Please enter a name');
       return;
@@ -547,22 +551,43 @@ export default function CreateNewScreen({ route, navigation }) {
               <TouchableOpacity
                 style={[
                   styles.visibilityOption,
-                  formData.isPublic && styles.visibilityOptionActive
+                  formData.isPublic && styles.visibilityOptionActive,
+                  !user?.isVerified && styles.visibilityOptionDisabled
                 ]}
-                onPress={() => setFormData({ ...formData, isPublic: true })}
+                onPress={() => {
+                  if (!user?.isVerified) {
+                    Alert.alert(
+                      'Get Verified',
+                      'Only verified accounts can create a public event or group. Get verified from your Profile.',
+                      [
+                        { text: 'Not Now', style: 'cancel' },
+                        { text: 'Go to Profile', onPress: () => navigation.navigate('Profile') }
+                      ]
+                    );
+                    return;
+                  }
+                  setFormData({ ...formData, isPublic: true });
+                }}
               >
                 <View style={styles.radioButton}>
                   {formData.isPublic && <View style={styles.radioButtonInner} />}
                 </View>
                 <View style={styles.visibilityInfo}>
-                  <Text style={[
-                    styles.visibilityTitle,
-                    formData.isPublic && styles.visibilityTitleActive
-                  ]}>
-                    Public
-                  </Text>
+                  <View style={styles.visibilityTitleRow}>
+                    <Text style={[
+                      styles.visibilityTitle,
+                      formData.isPublic && styles.visibilityTitleActive
+                    ]}>
+                      Public
+                    </Text>
+                    {!user?.isVerified && (
+                      <Ionicons name="lock-closed" size={14} color="#666666" />
+                    )}
+                  </View>
                   <Text style={styles.visibilityDescription}>
-                    Anyone can discover and join your {type}
+                    {user?.isVerified
+                      ? `Anyone can discover and join your ${type}`
+                      : 'Requires a verified account'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -865,6 +890,14 @@ const styles = StyleSheet.create({
   visibilityOptionActive: {
     borderColor: '#0078FF',
     backgroundColor: '#0A1A2E',
+  },
+  visibilityOptionDisabled: {
+    opacity: 0.6,
+  },
+  visibilityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   radioButton: {
     width: 20,

@@ -179,6 +179,10 @@ export default function EditEventScreen({ route, navigation }) {
 
   const handleSubmit = async () => {
     // Validation
+    if (formData.isPublic && !event.isPublic && !user?.isVerified) {
+      Alert.alert('Get Verified', 'Only verified accounts can make an event or group public. Get verified from your Profile.');
+      return;
+    }
     if (!formData.name.trim()) {
       Alert.alert('Error', 'Please enter a name');
       return;
@@ -556,22 +560,47 @@ export default function EditEventScreen({ route, navigation }) {
               <TouchableOpacity
                 style={[
                   styles.visibilityOption,
-                  formData.isPublic && styles.visibilityOptionActive
+                  formData.isPublic && styles.visibilityOptionActive,
+                  !formData.isPublic && !user?.isVerified && styles.visibilityOptionDisabled
                 ]}
-                onPress={() => setFormData({ ...formData, isPublic: true })}
+                onPress={() => {
+                  // Already public (from before this account needed to be
+                  // verified to get there) - tapping the already-selected
+                  // option is a no-op, not a new attempt to go public.
+                  if (formData.isPublic) return;
+                  if (!user?.isVerified) {
+                    Alert.alert(
+                      'Get Verified',
+                      'Only verified accounts can make an event or group public. Get verified from your Profile.',
+                      [
+                        { text: 'Not Now', style: 'cancel' },
+                        { text: 'Go to Profile', onPress: () => navigation.navigate('Profile') }
+                      ]
+                    );
+                    return;
+                  }
+                  setFormData({ ...formData, isPublic: true });
+                }}
               >
                 <View style={styles.radioButton}>
                   {formData.isPublic && <View style={styles.radioButtonInner} />}
                 </View>
                 <View style={styles.visibilityInfo}>
-                  <Text style={[
-                    styles.visibilityTitle,
-                    formData.isPublic && styles.visibilityTitleActive
-                  ]}>
-                    Public
-                  </Text>
+                  <View style={styles.visibilityTitleRow}>
+                    <Text style={[
+                      styles.visibilityTitle,
+                      formData.isPublic && styles.visibilityTitleActive
+                    ]}>
+                      Public
+                    </Text>
+                    {!formData.isPublic && !user?.isVerified && (
+                      <Ionicons name="lock-closed" size={14} color="#666666" />
+                    )}
+                  </View>
                   <Text style={styles.visibilityDescription}>
-                    Anyone can discover and join your {event.type}
+                    {user?.isVerified || formData.isPublic
+                      ? `Anyone can discover and join your ${event.type}`
+                      : 'Requires a verified account'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -885,6 +914,14 @@ const styles = StyleSheet.create({
   visibilityOptionActive: {
     borderColor: '#0078FF',
     backgroundColor: '#0A1A2E',
+  },
+  visibilityOptionDisabled: {
+    opacity: 0.6,
+  },
+  visibilityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   radioButton: {
     width: 20,

@@ -114,6 +114,26 @@ router.put('/profile', [protect,
   }
 });
 
+// @route   POST /api/users/verify
+// @desc    Get verified. No actual verification check yet - clicking
+//          the button on the Profile screen just flips it on. Verified
+//          status currently gates public event/group creation and
+//          private (1:1) chats (see requireVerified middleware).
+// @access  Private
+router.post('/verify', protect, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { isVerified: true } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/my-applications
 // @desc    Get events/groups the current user has applied to (any status),
 //          so they can see what they're waiting on and withdraw if needed

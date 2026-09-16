@@ -378,13 +378,24 @@ router.post('/', [protect,
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('❌ Validation errors:', errors.array());
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         errors: errors.array(),
         message: 'Validation failed'
       });
     }
-    
+
+    // A public event/group is discoverable by strangers browsing LFG -
+    // a private one only reaches people with an invite code, so it's
+    // fine for an unverified account. isPublic defaults true (see the
+    // Event schema), so an omitted value still counts as public here.
+    if (req.body.isPublic !== false && !req.user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Get verified from your Profile to create a public event or group'
+      });
+    }
+
     // If auto-inviting groups, the requester has to actually run each one
     // - otherwise anyone could dump an invite card into a chat they don't
     // belong to.
@@ -573,6 +584,14 @@ router.put('/:id', [protect,
     // could never actually edit the event/group.
     if (!event.canUserManage(req.user.id)) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    // Flipping a private event/group public is the same gate as creating
+    // one public from the start.
+    if (req.body.isPublic === true && !event.isPublic && !req.user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Get verified from your Profile to make this public'
+      });
     }
 
     // CHANGED: Update allowed fields to include category instead of interests
