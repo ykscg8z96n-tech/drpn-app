@@ -466,13 +466,13 @@ const styles = StyleSheet.create({
   headerBar: {
     backgroundColor: '#111111',
     paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 140,
     alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   headerAccentLine: {
     height: 2,
