@@ -1,27 +1,12 @@
 // mobile/src/components/LocationFilterModal.web.js - Marketplace-style
-// "browse events somewhere else" picker, web build. Uses Leaflet +
-// OpenStreetMap-derived tiles directly (free, no API key) rather than
-// react-native-maps, which doesn't render on Expo web at all.
+// "browse events somewhere else" picker, web build. Uses the Google Maps
+// JavaScript SDK (loaded on demand from the key the backend hands out via
+// /geocode/maps-key) rather than react-native-maps, which doesn't render
+// on Expo web at all.
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ActivityIndicator, FlatList, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Platform, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// Static import rather than dynamic import('leaflet') - this is a .web.js
-// file so it's never bundled for native regardless, and a static import
-// avoids depending on a separately-fetched chunk loading correctly
-// (relative chunk URLs can be finicky under Vercel's SPA rewrite rule).
-import L from 'leaflet';
 import api from '../services/api';
-
-// Leaflet's default marker icon normally resolves its image paths relative
-// to its own CSS file - loading it through a bundler instead of a plain
-// <script> tag breaks that lookup and every marker renders as a broken
-// image. Point it at the CDN copies directly.
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
 
 const MIN_RADIUS_KM = 2;
 const MAX_RADIUS_KM = 150;
@@ -29,40 +14,40 @@ const DEFAULT_RADIUS_KM = 25;
 const RADIUS_PRESETS_KM = [10, 25, 50, 100];
 const ACCENT = '#0078FF';
 
-let leafletCssInjected = false;
-function ensureLeafletCss() {
-  if (leafletCssInjected || typeof document === 'undefined') return;
-  leafletCssInjected = true;
+const makeSessionToken = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-  document.head.appendChild(link);
+// The SDK script only ever needs loading once per page load - a second
+// <script> tag with the same key would just redefine window.google and
+// race with anything already using it.
+let mapsLoadPromise = null;
+function loadGoogleMaps() {
+  if (window.google?.maps) return Promise.resolve();
+  if (mapsLoadPromise) return mapsLoadPromise;
 
-  // Leaflet's chrome (zoom buttons, attribution strip) ships light-mode
-  // styling that reads like a raw library default dropped onto a dark
-  // app - restyle it to match instead of leaving it stock.
-  const override = document.createElement('style');
-  override.textContent = `
-    .leaflet-container { background: #1A1A1A; font-family: inherit; }
-    .leaflet-control-zoom { border: none !important; box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important; }
-    .leaflet-control-zoom a {
-      background-color: #1A1A1A !important;
-      color: #FFFFFF !important;
-      border-color: #333333 !important;
-      width: 32px !important;
-      height: 32px !important;
-      line-height: 32px !important;
-    }
-    .leaflet-control-zoom a:hover { background-color: #2A2A2A !important; }
-    .leaflet-control-attribution {
-      background: rgba(18, 18, 18, 0.75) !important;
-      color: #999999 !important;
-      backdrop-filter: blur(4px);
-    }
-    .leaflet-control-attribution a { color: #C7C4C4 !important; }
-  `;
-  document.head.appendChild(override);
+  mapsLoadPromise = api.get('/geocode/maps-key')
+    .then(({ data }) => {
+      const apiKey = data?.data?.apiKey;
+      if (!apiKey) throw new Error('No Maps API key returned');
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async`;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Failed to load Google Maps'));
+        document.head.appendChild(script);
+      });
+    })
+    .catch((error) => {
+      mapsLoadPromise = null; // let a future attempt retry instead of caching the failure
+      throw error;
+    });
+
+  return mapsLoadPromise;
 }
 
 export default function LocationFilterModal({ visible, onClose, onApply, onClear, initialLocation, deviceLocation }) {
@@ -70,6 +55,7 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
   const mapRef = useRef(null);
   const circleRef = useRef(null);
   const markerRef = useRef(null);
+  const sessionTokenRef = useRef(makeSessionToken());
 
   const [center, setCenter] = useState(null); // { lat, lng }
   const [label, setLabel] = useState('');
@@ -77,14 +63,16 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [mapError, setMapError] = useState(false);
   const debounceRef = useRef(null);
 
-  // Seed state AND mount the Leaflet map in one effect, both from props
-  // directly rather than from `center` state - reading state set by a
-  // separate effect on the same render pass doesn't work here, since by
-  // the time that state actually lands, [visible] (this effect's only
-  // real dependency) hasn't changed again, so React would never re-run
-  // this effect and the map would never be created.
+  // Seed state AND mount the map in one effect, both from props directly
+  // rather than from `center` state - reading state set by a separate
+  // effect on the same render pass doesn't work here, since by the time
+  // that state actually lands, [visible] (this effect's only real
+  // dependency) hasn't changed again, so React would never re-run this
+  // effect and the map would never be created.
   useEffect(() => {
     if (!visible) return;
 
@@ -100,55 +88,57 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
     setRadiusKm(seedRadius);
     setQuery('');
     setSuggestions([]);
+    setMapError(false);
+    sessionTokenRef.current = makeSessionToken();
 
     if (!seed || !mapContainerRef.current) return;
 
-    ensureLeafletCss();
+    let cancelled = false;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [seed.lat, seed.lng],
-      zoom: 9,
-      zoomControl: true,
+    loadGoogleMaps().then(() => {
+      if (cancelled || !mapContainerRef.current) return;
+
+      const map = new window.google.maps.Map(mapContainerRef.current, {
+        center: seed,
+        zoom: 9,
+        disableDefaultUI: true,
+        zoomControl: true,
+        styles: DARK_MAP_STYLE,
+      });
+
+      const marker = new window.google.maps.Marker({ position: seed, map });
+      const circle = new window.google.maps.Circle({
+        center: seed,
+        radius: seedRadius * 1000,
+        map,
+        strokeColor: ACCENT,
+        strokeWeight: 2,
+        fillColor: ACCENT,
+        fillOpacity: 0.12,
+      });
+
+      map.addListener('click', (e) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setCenter({ lat, lng });
+        setLabel('');
+        marker.setPosition({ lat, lng });
+        circle.setCenter({ lat, lng });
+      });
+
+      mapRef.current = map;
+      markerRef.current = marker;
+      circleRef.current = circle;
+    }).catch((error) => {
+      console.error('❌ Failed to load Google Maps:', error);
+      if (!cancelled) setMapError(true);
     });
-    // Standard OpenStreetMap tiles - a fully dark basemap made place
-    // names and water/land contrast hard to read; normal map colors
-    // inside a dark app chrome (search bar, header, radius panel) reads
-    // fine, same as any map app's light map on a dark surrounding UI.
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
-
-    const marker = L.marker([seed.lat, seed.lng]).addTo(map);
-    const circle = L.circle([seed.lat, seed.lng], {
-      radius: seedRadius * 1000,
-      color: ACCENT,
-      weight: 2,
-      fillColor: ACCENT,
-      fillOpacity: 0.12,
-    }).addTo(map);
-
-    map.on('click', (e) => {
-      const { lat, lng } = e.latlng;
-      setCenter({ lat, lng });
-      setLabel('');
-      marker.setLatLng([lat, lng]);
-      circle.setLatLng([lat, lng]);
-    });
-
-    mapRef.current = map;
-    markerRef.current = marker;
-    circleRef.current = circle;
-
-    // The container's final flex-computed size can land a frame after
-    // Leaflet reads it, especially right as the modal's slide-in
-    // animation starts - without this it sometimes initializes against
-    // a 0-height container and renders blank until the window resizes.
-    requestAnimationFrame(() => map.invalidateSize());
 
     return () => {
-      map.remove();
+      cancelled = true;
       mapRef.current = null;
+      markerRef.current = null;
+      circleRef.current = null;
     };
   }, [visible]);
 
@@ -156,9 +146,9 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
   // that come from search selection or the slider, without re-creating it.
   useEffect(() => {
     if (!mapRef.current || !center) return;
-    markerRef.current?.setLatLng([center.lat, center.lng]);
-    circleRef.current?.setLatLng([center.lat, center.lng]);
-    mapRef.current.setView([center.lat, center.lng], mapRef.current.getZoom());
+    markerRef.current?.setPosition(center);
+    circleRef.current?.setCenter(center);
+    mapRef.current.setCenter(center);
   }, [center]);
 
   useEffect(() => {
@@ -175,7 +165,7 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const params = { q: text };
+        const params = { q: text, sessionToken: sessionTokenRef.current };
         if (deviceLocation) {
           params.lat = deviceLocation.latitude;
           params.lon = deviceLocation.longitude;
@@ -188,13 +178,25 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
         setSearching(false);
       }
     }, 400);
-  }, []);
+  }, [deviceLocation?.latitude, deviceLocation?.longitude]);
 
-  const handleSelectSuggestion = (place) => {
-    setCenter({ lat: place.coordinates[1], lng: place.coordinates[0] });
-    setLabel(place.address);
-    setQuery(place.address);
+  const handleSelectSuggestion = async (place) => {
     setSuggestions([]);
+    setQuery(place.fullAddress);
+    setResolving(true);
+    try {
+      const response = await api.get(`/geocode/place/${encodeURIComponent(place.placeId)}`, {
+        params: { sessionToken: sessionTokenRef.current }
+      });
+      const resolved = response.data.data;
+      setCenter({ lat: resolved.coordinates[1], lng: resolved.coordinates[0] });
+      setLabel(resolved.address || resolved.fullAddress);
+    } catch (error) {
+      // no coordinates to fall back to here - just leave the map where it was
+    } finally {
+      setResolving(false);
+      sessionTokenRef.current = makeSessionToken();
+    }
   };
 
   const handleApply = () => {
@@ -228,13 +230,13 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
               placeholder="Search a city or address"
               placeholderTextColor="#666666"
             />
-            {searching && <ActivityIndicator size="small" color={ACCENT} />}
+            {(searching || resolving) && <ActivityIndicator size="small" color={ACCENT} />}
           </View>
           {suggestions.length > 0 && (
             <FlatList
               style={styles.suggestionsList}
               data={suggestions}
-              keyExtractor={(item, i) => `${item.address}-${i}`}
+              keyExtractor={(item, i) => `${item.placeId}-${i}`}
               renderItem={({ item }) => (
                 <TouchableOpacity style={styles.suggestionRow} onPress={() => handleSelectSuggestion(item)}>
                   <Ionicons name="location-outline" size={16} color="#666666" />
@@ -245,7 +247,13 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
           )}
         </View>
 
-        <View ref={mapContainerRef} style={styles.map} />
+        {mapError ? (
+          <View style={[styles.map, styles.mapErrorContainer]}>
+            <Text style={styles.mapErrorText}>Map couldn't load. You can still search above.</Text>
+          </View>
+        ) : (
+          <View ref={mapContainerRef} style={styles.map} />
+        )}
 
         <View style={styles.radiusSection}>
           <View style={styles.radiusHeader}>
@@ -289,6 +297,22 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
     </Modal>
   );
 }
+
+// Google's own "Night" style, trimmed to match the app's dark chrome
+// instead of the light default basemap.
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#1A1A1A' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1A1A1A' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8A8A8A' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#333333' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#252525' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1F2A1F' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2A2A2A' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1A1A1A' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#333333' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#252525' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0E1626' }] },
+];
 
 // A plain <input type="range"> only takes its accent-color from the
 // `accentColor` CSS property in modern browsers (no custom thumb needed),
@@ -417,6 +441,16 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
     marginTop: 12,
+  },
+  mapErrorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  mapErrorText: {
+    color: '#999999',
+    fontSize: 14,
+    textAlign: 'center',
   },
   radiusSection: {
     paddingHorizontal: 20,
