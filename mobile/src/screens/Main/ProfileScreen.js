@@ -871,7 +871,7 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionButton, styles.lastActionButton]} onPress={handleDeleteAccount}>
-          <Ionicons name="trash-outline" size={24} color="#FF0F0F)" />
+          <Ionicons name="trash-outline" size={24} color="#FF0F0F" />
           <Text style={[styles.actionText, { color: '#FF0F0F' }]}>Delete Account</Text>
         </TouchableOpacity>
       </View>
