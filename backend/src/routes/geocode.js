@@ -152,4 +152,58 @@ router.get('/place/:placeId', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/geocode/reverse
+// @desc    Turn a lat/lon (e.g. a map click, or the device's own location)
+//          back into a city name, so the UI can show "Toronto, ON"
+//          instead of raw coordinates. Uses the classic Geocoding API
+//          (a separate API from Places (New) - needs its own "Geocoding
+//          API" enablement in Cloud Console) since Places (New) has no
+//          reverse-geocode endpoint of its own.
+// @access  Private
+router.get('/reverse', protect, async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    if (isNaN(lat) || isNaN(lon)) {
+      return res.status(400).json({ success: false, message: 'lat and lon are required' });
+    }
+    if (!GOOGLE_PLACES_API_KEY) {
+      console.error('❌ GOOGLE_PLACES_API_KEY is not set');
+      return res.status(503).json({ success: false, message: 'Address lookup is not configured' });
+    }
+
+    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+    url.searchParams.set('latlng', `${lat},${lon}`);
+    url.searchParams.set('language', 'en');
+    url.searchParams.set('key', GOOGLE_PLACES_API_KEY);
+
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (!response.ok || (result.status && result.status !== 'OK' && result.status !== 'ZERO_RESULTS')) {
+      console.error('❌ Google reverse geocode error:', response.status, result.status, result.error_message);
+      return res.status(502).json({ success: false, message: 'Address lookup unavailable' });
+    }
+
+    const place = result.results?.[0];
+    const components = place?.address_components || [];
+    const findComponent = (type) => components.find(c => c.types?.includes(type))?.short_name || '';
+    const city = findComponent('locality') || findComponent('postal_town') || findComponent('sublocality') || '';
+    const state = findComponent('administrative_area_level_1') || '';
+
+    res.json({
+      success: true,
+      data: {
+        fullAddress: place?.formatted_address || '',
+        city,
+        state,
+        address: city && state ? `${city}, ${state}` : (place?.formatted_address || '')
+      }
+    });
+  } catch (error) {
+    console.error('❌ Geocode reverse error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
