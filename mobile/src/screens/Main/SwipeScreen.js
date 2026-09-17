@@ -421,7 +421,22 @@ export default function SwipeScreen({ navigation }) {
                 style={styles.drawerContent}
                 onPress={(e) => e.stopPropagation()}
               >
-                {/* Row 1: type filter */}
+                {/* Row 1: browse location */}
+                <View style={styles.filterRow}>
+                  <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
+                    <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
+                    <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
+                      {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+                    </Text>
+                    {browseLocation && (
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={16} color="#999999" />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Row 2: type filter */}
                 <View style={styles.filterRow}>
                   <View style={styles.lfgSection}>
                     <View style={styles.lfgItem}>
@@ -457,7 +472,7 @@ export default function SwipeScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* Row 2: categories, full width */}
+                {/* Row 3: categories, full width */}
                 <View style={styles.filterRow}>
                 <ScrollView
                   horizontal
@@ -513,21 +528,6 @@ export default function SwipeScreen({ navigation }) {
                   ))}
 
                 </ScrollView>
-                </View>
-
-                {/* Row 3: browse location */}
-                <View style={styles.filterRow}>
-                  <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
-                    <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
-                    <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
-                      {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
-                    </Text>
-                    {browseLocation && (
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={16} color="#999999" />
-                      </TouchableOpacity>
-                    )}
-                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             </Animated.View>
@@ -789,7 +789,22 @@ export default function SwipeScreen({ navigation }) {
               style={styles.drawerContent}
               onPress={(e) => e.stopPropagation()}
             >
-              {/* Row 1: type filter */}
+              {/* Row 1: browse location */}
+              <View style={styles.filterRow}>
+                <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
+                  <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
+                  <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
+                    {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+                  </Text>
+                  {browseLocation && (
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color="#999999" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Row 2: type filter */}
               <View style={styles.filterRow}>
                 <View style={styles.lfgSection}>
                   <View style={styles.lfgItem}>
@@ -825,7 +840,7 @@ export default function SwipeScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Row 2: categories, full width */}
+              {/* Row 3: categories, full width */}
               <View style={styles.filterRow}>
               <ScrollView
                 horizontal
@@ -837,10 +852,10 @@ export default function SwipeScreen({ navigation }) {
                   style={styles.categoryItem}
                   onPress={handleClearFilter}
                 >
-                  <Ionicons 
-                    name="grid-outline" 
-                    size={20} 
-                    color={!selectedFilter ? '#0078FF' : '#FFFFFF'} 
+                  <Ionicons
+                    name="grid-outline"
+                    size={20}
+                    color={!selectedFilter ? '#0078FF' : '#FFFFFF'}
                   />
                   <Text style={[
                     styles.categoryText,
@@ -855,7 +870,7 @@ export default function SwipeScreen({ navigation }) {
                   key={category.id}
                   style={[
                     styles.categoryItem,
-                    selectedFilter === category.id && { 
+                    selectedFilter === category.id && {
                       backgroundColor: 'rgba(255, 255, 255, 0.0)',
                       borderRadius: 8,
                       paddingHorizontal: 8,
@@ -863,14 +878,14 @@ export default function SwipeScreen({ navigation }) {
                   ]}
                   onPress={() => handleFilterSelect(category.id)}
                 >
-                  <Ionicons 
-                    name={category.icon} 
-                    size={20} 
+                  <Ionicons
+                    name={category.icon}
+                    size={20}
                     color={category.color}  // ✅ Always use category color
                   />
                   <Text style={[
                     styles.categoryText,
-                    { 
+                    {
                       color: selectedFilter === category.id ? category.color : '#FFFFFF',  // ✅ Use category color when selected
                       fontWeight: selectedFilter === category.id ? '600' : '500'
                     }
@@ -880,21 +895,6 @@ export default function SwipeScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
               </ScrollView>
-              </View>
-
-              {/* Row 3: browse location */}
-              <View style={styles.filterRow}>
-                <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
-                  <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
-                  <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
-                    {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
-                  </Text>
-                  {browseLocation && (
-                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="close-circle" size={16} color="#999999" />
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           </Animated.View>
