@@ -109,6 +109,8 @@ router.get('/', protect, async (req, res) => {
       if (!eventDoc) return;
       const chatId = `${eventDoc.type}-${eventDoc._id}`;
       item.unreadCount = await Message.getUnreadCount(eventDoc.type, chatId, req.user.id, item.acceptedAt);
+      const lastMsg = await Message.getLastMessage(eventDoc.type, chatId);
+      item.lastMessage = lastMsg ? { text: lastMsg.text, createdAt: lastMsg.timestamp } : null;
     }));
 
     console.log(`📊 Total ${type || 'all'} items for user: ${allItems.length}`);

@@ -272,6 +272,17 @@ messageSchema.statics.getUnreadCount = function(chatType, chatId, userId, since 
   return this.countDocuments(query);
 };
 
+// Static method to get the most recent real (non-system) message in a
+// chat, for feed previews (MatchesScreen's third grey line) - system
+// messages (join/leave, connection-established) are excluded so a chat
+// with only those still reads as "no messages yet" rather than showing
+// system text as if someone had said it.
+messageSchema.statics.getLastMessage = function(chatType, chatId) {
+  return this.findOne({ chatType, chatId, messageType: { $ne: 'system' } })
+    .sort({ timestamp: -1 })
+    .select('text timestamp');
+};
+
 // Static method to mark all messages as read for user in chat
 messageSchema.statics.markChatAsRead = function(chatType, chatId, userId) {
   return this.updateMany(

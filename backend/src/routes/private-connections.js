@@ -159,7 +159,9 @@ router.get('/', protect, async (req, res) => {
       const uids = [req.user.id, connection.otherUser._id.toString()].sort();
       const chatId = `private-${uids[0]}-${uids[1]}`;
       const unreadCount = await Message.getUnreadCount('private', chatId, req.user.id);
-      return { ...connection, unreadCount };
+      const lastMsg = await Message.getLastMessage('private', chatId);
+      const lastMessage = lastMsg ? { text: lastMsg.text, createdAt: lastMsg.timestamp } : null;
+      return { ...connection, unreadCount, lastMessage };
     }));
 
     res.json({
