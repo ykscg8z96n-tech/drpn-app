@@ -67,6 +67,21 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
   const [mapError, setMapError] = useState(false);
   const debounceRef = useRef(null);
 
+  // Reverse geocodes a click/seed point to a city name instead of leaving
+  // the label as raw coordinates or blank - fire-and-forget from the
+  // caller's point of view, it just fills in `label` whenever it resolves.
+  const reverseGeocode = useCallback(async (lat, lng) => {
+    try {
+      const response = await api.get('/geocode/reverse', { params: { lat, lon: lng } });
+      const resolved = response.data.data;
+      if (resolved?.address || resolved?.fullAddress) {
+        setLabel(resolved.address || resolved.fullAddress);
+      }
+    } catch (error) {
+      // leave whatever label (or lack of one) was already set
+    }
+  }, []);
+
   // Seed state AND mount the map in one effect, both from props directly
   // rather than from `center` state - reading state set by a separate
   // effect on the same render pass doesn't work here, since by the time
@@ -92,6 +107,12 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
     sessionTokenRef.current = makeSessionToken();
 
     if (!seed || !mapContainerRef.current) return;
+
+    // No stored label (e.g. seeded from device location rather than a
+    // previously-applied filter) - look up what city that actually is.
+    if (!initialLocation?.label) {
+      reverseGeocode(seed.lat, seed.lng);
+    }
 
     let cancelled = false;
 
@@ -122,8 +143,10 @@ export default function LocationFilterModal({ visible, onClose, onApply, onClear
         const lng = e.latLng.lng();
         setCenter({ lat, lng });
         setLabel('');
+        setQuery('');
         marker.setPosition({ lat, lng });
         circle.setCenter({ lat, lng });
+        reverseGeocode(lat, lng);
       });
 
       mapRef.current = map;
