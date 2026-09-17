@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   headerBar: {
     backgroundColor: '#111111',
     paddingVertical: 16,
-    paddingHorizontal: 80,
+    paddingHorizontal: 60,
     alignItems: 'flex-start',
   },
   headerTitle: {
