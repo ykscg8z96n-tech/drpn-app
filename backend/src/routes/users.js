@@ -10,7 +10,7 @@ const PrivateConnection = require('../models/PrivateConnection');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { getBotUserId } = require('../services/botUser');
-const { getOrCreatePrivateConnection, sendWelcomeMessage, postSystemAnnouncement } = require('../services/botNotice');
+const { getOrCreatePrivateConnection, sendWelcomeMessage, postSystemAnnouncement, sendBotNotice } = require('../services/botNotice');
 const { cancelEventForRoster } = require('../services/eventLifecycle');
 
 // No need for category validation since users don't have preferred categories
@@ -374,20 +374,28 @@ router.post('/swipe', [protect,
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
 
-    // 🚫 PREVENT ORGANIZER FROM APPLYING TO THEIR OWN EVENT
-    if (event.organizer.toString() === req.user.id) {
-      console.log(`❌ Organizer ${req.user.id} tried to swipe on their own event: ${event.name}`);
+    // 🚫 PREVENT AN OWNER FROM APPLYING TO THEIR OWN EVENT/GROUP
+    if (event.canUserManage(req.user.id)) {
+      console.log(`❌ Owner ${req.user.id} tried to swipe on their own event: ${event.name}`);
       return res.status(400).json({
         success: false,
-        message: 'You cannot apply to your own event as the organizer'
+        message: 'You cannot apply to your own event as an owner'
       });
     }
 
     // Check if already swiped on this event
     if (user.hasSwipedOnEvent(eventId)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Already swiped on this event' 
+      return res.status(400).json({
+        success: false,
+        message: 'Already swiped on this event'
+      });
+    }
+
+    // Super swipe is premium-only.
+    if (action === 'super_like' && !user.canUseSuperLike()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Super swipe is a premium feature - start your free trial from Profile'
       });
     }
 
@@ -418,6 +426,21 @@ router.post('/swipe', [protect,
 
         applicationCreated = true;
         console.log(`✅ User ${req.user.id} applied to event: ${event.name}`);
+
+        // A super swipe jumps to the top of the pending list (see
+        // GET /:id/applicants's sort) and is worth telling the owners
+        // about directly - a regular like/apply doesn't get either.
+        if (action === 'super_like') {
+          try {
+            await Promise.all(event.admins.map(adminId => sendBotNotice(
+              adminId,
+              `${user.name || 'Someone'} gave "${event.name}" a super swipe! They're now at the top of your pending applicants.`,
+              req
+            )));
+          } catch (notifyError) {
+            console.error('⚠️ Failed to send super-swipe notice:', notifyError);
+          }
+        }
       }
     }
 

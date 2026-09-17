@@ -271,40 +271,50 @@ export default function SwipeScreen({ navigation }) {
     Alert.alert('No more events!', 'Check back later for new events.');
   };
 
+  // Super swipe is premium-only, no free daily allowance - the server
+  // enforces this too (POST /users/swipe), this is just so an
+  // unverified/non-premium user gets a clear prompt instead of a 403.
   const handleSuperLike = async () => {
-  if (!user.premium?.active && user.premium?.superLikesUsed >= 1) {
-    Alert.alert('Premium Feature', 'Upgrade to premium for unlimited super likes!');
-    return;
-  }
-
-  if (events[cardIndex]) {
-    try {
-      await api.post('/users/swipe', {
-        eventId: events[cardIndex]._id,
-        action: 'super_like'
-      });
-      
-      console.log('✅ Super like sent for event:', events[cardIndex]._id);
-      
-      // Show success message for super like
+    if (!user?.isPremium) {
       Alert.alert(
-        'Super Application Sent! ⚡', 
-        'Your priority application has been sent! This will appear at the top of the organizer\'s list.',
-        [{ text: 'Awesome!', style: 'default' }]
+        'Premium Feature',
+        'Super swipe is premium-only. Start your free trial from Profile to use it.'
       );
-      
-      swiperRef.current?.swipeTop();
-    } catch (error) {
-      console.error('Error sending super like:', error);
-      console.error('Error details:', error.response?.data);
-      Alert.alert('Error', 'Failed to send super like');
+      return;
     }
-  }
-};
 
+    if (events[cardIndex]) {
+      try {
+        await api.post('/users/swipe', {
+          eventId: events[cardIndex]._id,
+          action: 'super_like'
+        });
+
+        console.log('✅ Super like sent for event:', events[cardIndex]._id);
+
+        // Show success message for super like
+        Alert.alert(
+          'Super Application Sent! ⚡',
+          'Your priority application has been sent! This will appear at the top of the organizer\'s list, and they\'ve been notified.',
+          [{ text: 'Awesome!', style: 'default' }]
+        );
+
+        swiperRef.current?.swipeTop();
+      } catch (error) {
+        console.error('Error sending super like:', error);
+        console.error('Error details:', error.response?.data);
+        Alert.alert('Error', error.response?.data?.message || 'Failed to send super like');
+      }
+    }
+  };
+
+  // Rewind isn't actually implemented yet - there's no backend endpoint
+  // to undo the last swipe (would need to pop it from User.swipes and
+  // roll back any applicant entry it created). This still only gets as
+  // far as the premium check so free users get a consistent prompt.
   const handleRewind = async () => {
-    if (!user.premium?.active) {
-      Alert.alert('Premium Feature', 'Upgrade to premium to rewind swipes!');
+    if (!user?.isPremium) {
+      Alert.alert('Premium Feature', 'Rewind is premium-only. Start your free trial from Profile to use it.');
       return;
     }
     Alert.alert('Rewind', 'Rewind feature coming soon!');
