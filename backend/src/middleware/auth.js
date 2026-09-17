@@ -41,9 +41,12 @@ const organizer = async (req, res, next) => {
   }
 };
 
-// Check if user has premium
+// Check if user has premium. Was checking req.user.premium.active/
+// .expiresAt - premium is a usage-tracking sub-object (superLikesUsed
+// etc), it never had those fields; isPremium/premiumExpiresAt (set by
+// POST /users/premium-trial) are the real top-level fields.
 const premium = async (req, res, next) => {
-  if (req.user && req.user.premium.active && new Date(req.user.premium.expiresAt) > new Date()) {
+  if (req.user && req.user.isPremium && req.user.premiumExpiresAt && new Date(req.user.premiumExpiresAt) > new Date()) {
     next();
   } else {
     res.status(403).json({ success: false, message: 'Premium subscription required' });

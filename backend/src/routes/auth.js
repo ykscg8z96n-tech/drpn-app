@@ -80,6 +80,8 @@ router.post('/register', authLimiter, [
         isOrganizer: user.isOrganizer,
         isVerified: user.isVerified,
         isPremium: user.isPremium,
+        premiumExpiresAt: user.premiumExpiresAt,
+        premiumTrialUsedAt: user.premiumTrialUsedAt,
         searchRadius: user.searchRadius,
         reputation: user.reputation,
         location: user.location
@@ -142,6 +144,7 @@ router.post('/login', authLimiter, [
         isVerified: user.isVerified,
         isPremium: user.isPremium,
         premiumExpiresAt: user.premiumExpiresAt,
+        premiumTrialUsedAt: user.premiumTrialUsedAt,
         searchRadius: user.searchRadius,
         reputation: user.reputation,
         location: user.location,

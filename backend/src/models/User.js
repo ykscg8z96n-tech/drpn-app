@@ -99,6 +99,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Set the first time POST /users/premium-trial succeeds, so the
+  // one-time free trial can't just be reclaimed once it lapses.
+  premiumTrialUsedAt: {
+    type: Date
+  },
   premiumExpiresAt: {
     type: Date
   },

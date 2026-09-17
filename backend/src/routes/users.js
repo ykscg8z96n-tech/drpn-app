@@ -134,6 +134,34 @@ router.post('/verify', protect, async (req, res) => {
   }
 });
 
+const PREMIUM_TRIAL_DAYS = 7;
+
+// @route   POST /api/users/premium-trial
+// @desc    One-time free trial - no payment processor hooked up yet, so
+//          clicking the button on the Profile screen is the whole flow.
+//          Sets isPremium + a real expiry so premium features and the
+//          `premium` middleware behave exactly like a paid subscription
+//          would once billing exists; premiumTrialUsedAt blocks
+//          reclaiming it once it lapses.
+// @access  Private
+router.post('/premium-trial', protect, async (req, res) => {
+  try {
+    if (req.user.premiumTrialUsedAt) {
+      return res.status(400).json({ success: false, message: "You've already used your free trial" });
+    }
+    const expiresAt = new Date(Date.now() + PREMIUM_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { isPremium: true, premiumExpiresAt: expiresAt, premiumTrialUsedAt: new Date() } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/my-applications
 // @desc    Get events/groups the current user has applied to (any status),
 //          so they can see what they're waiting on and withdraw if needed

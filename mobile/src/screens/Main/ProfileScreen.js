@@ -259,6 +259,38 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // No payment processor hooked up yet - this is the whole "subscribe"
+  // flow for now, a one-time 7-day trial. Gates premium-only swipe
+  // features (unlimited super-likes/rewinds - see the premium
+  // middleware and User.canSuperLike/canRewind).
+  const handleStartPremiumTrial = () => {
+    Alert.alert(
+      'Start Free Trial',
+      "Try Premium free for 7 days - unlimited super-likes and rewinds. You can only claim this once.",
+      [
+        { text: 'Not Now', style: 'cancel' },
+        {
+          text: 'Start Trial',
+          onPress: async () => {
+            try {
+              const response = await api.post('/users/premium-trial');
+              setProfile(response.data.data);
+              updateUser({
+                ...user,
+                isPremium: true,
+                premiumExpiresAt: response.data.data.premiumExpiresAt,
+                premiumTrialUsedAt: response.data.data.premiumTrialUsedAt
+              });
+              Alert.alert('Premium Activated', "You're on a 7-day free trial!");
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to start trial');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
       Alert.alert('Error', 'Please fill in both fields');
@@ -809,17 +841,32 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Actions */}
       <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="shield-checkmark-outline" size={24} color="#0078FF" />
-          <Text style={styles.actionText}>Get Verified</Text>
-          <Ionicons name="chevron-forward" size={16} color="#666666" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="star-outline" size={24} color="#FFD700" />
-          <Text style={styles.actionText}>Upgrade to Premium</Text>
-          <Ionicons name="chevron-forward" size={16} color="#666666" />
-        </TouchableOpacity>
+        {/* Verification has its own row up in "My basics" (with a
+            Get Verified button that's actually wired up) - this used to
+            be a second, unwired "Get Verified" entry here that did
+            nothing when tapped. */}
+        {profile?.isPremium ? (
+          <View style={styles.actionButton}>
+            <Ionicons name="star" size={24} color="#FFD700" />
+            <Text style={styles.actionText}>
+              Premium active{profile?.premiumExpiresAt ? ` until ${new Date(profile.premiumExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleStartPremiumTrial}
+            disabled={!!profile?.premiumTrialUsedAt}
+          >
+            <Ionicons name="star-outline" size={24} color="#FFD700" />
+            <Text style={styles.actionText}>
+              {profile?.premiumTrialUsedAt ? 'Free trial already used' : 'Start Premium Free Trial'}
+            </Text>
+            {!profile?.premiumTrialUsedAt && (
+              <Ionicons name="chevron-forward" size={16} color="#666666" />
+            )}
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('HowToUse')}>
           <Ionicons name="help-circle-outline" size={24} color="#666666" />
@@ -1029,6 +1076,9 @@ export default function ProfileScreen({ navigation }) {
             </Text>
             {profile?.isVerified && (
               <Ionicons name="checkmark-circle" size={18} color="#0078FF" />
+            )}
+            {profile?.isPremium && (
+              <Ionicons name="star" size={18} color="#FFD700" />
             )}
           </View>
 
