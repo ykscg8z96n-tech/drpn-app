@@ -4,15 +4,27 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 
-// Address input with live suggestions from the backend's geocode proxy
-// (Nominatim). Picking a suggestion fills in city/state/coordinates for
-// the event; typing without picking one still works exactly like before
-// (onChangeText fallback), it just won't have real coordinates attached.
+const makeSessionToken = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+
+// Address input with live suggestions from the backend's Google Places
+// (New) proxy. Autocomplete only returns placeId + display text (no
+// coordinates - those are pricier), so picking a suggestion triggers a
+// second call to resolve the full address + coordinates. Both calls share
+// a sessionToken so Google bills the whole search as one session; a fresh
+// token is minted after each pick (or when the field is cleared) so the
+// next search starts its own billing session.
 export default function AddressAutocompleteInput({ value, onChangeText, onSelectPlace, placeholder, biasLocation, showIcon = true }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef(null);
+  const sessionTokenRef = useRef(makeSessionToken());
 
   const fetchSuggestions = useCallback((text) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -23,7 +35,7 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const params = { q: text };
+        const params = { q: text, sessionToken: sessionTokenRef.current };
         if (biasLocation?.latitude != null && biasLocation?.longitude != null) {
           params.lat = biasLocation.latitude;
           params.lon = biasLocation.longitude;
@@ -44,10 +56,22 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
     fetchSuggestions(text);
   };
 
-  const handleSelect = (place) => {
+  const handleSelect = async (place) => {
     setShowSuggestions(false);
     setSuggestions([]);
-    onSelectPlace(place);
+    setResolving(true);
+    try {
+      const response = await api.get(`/geocode/place/${encodeURIComponent(place.placeId)}`, {
+        params: { sessionToken: sessionTokenRef.current }
+      });
+      onSelectPlace(response.data.data);
+    } catch (error) {
+      // fall back to what we already have (no coordinates) rather than losing the pick
+      onSelectPlace(place);
+    } finally {
+      setResolving(false);
+      sessionTokenRef.current = makeSessionToken();
+    }
   };
 
   return (
@@ -62,7 +86,7 @@ export default function AddressAutocompleteInput({ value, onChangeText, onSelect
           placeholder={placeholder}
           placeholderTextColor="#666"
         />
-        {loading && <ActivityIndicator size="small" color="#0078FF" />}
+        {(loading || resolving) && <ActivityIndicator size="small" color="#0078FF" />}
       </View>
 
       {showSuggestions && suggestions.length > 0 && (
