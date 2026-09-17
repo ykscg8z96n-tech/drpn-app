@@ -441,7 +441,6 @@ export default function SwipeScreen({ navigation }) {
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.locationLink} onPress={openFilterDrawer}>
-            <Ionicons name="location-outline" size={16} color="#FFD700" />
             <Text style={styles.locationLinkText}>
               Try expanding your radius, or premium to adjust your location
             </Text>
@@ -478,7 +477,7 @@ export default function SwipeScreen({ navigation }) {
                   <View style={styles.lfgSection}>
                     <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <View>
-                        <Ionicons name="location" size={22} color="#0078FF" />
+                        <Ionicons name="location" size={22} color="#FFD700" />
                         {browseLocation && (
                           <TouchableOpacity
                             onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
@@ -563,7 +562,7 @@ export default function SwipeScreen({ navigation }) {
                     <Ionicons
                       name="grid-outline"
                       size={20}
-                      color="#FFFFFF"
+                      color="#0078FF"
                     />
                     <Text style={styles.categoryText}>
                       All
@@ -867,7 +866,7 @@ export default function SwipeScreen({ navigation }) {
                 <View style={styles.lfgSection}>
                   <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <View>
-                      <Ionicons name="location" size={22} color="#0078FF" />
+                      <Ionicons name="location" size={22} color="#FFD700" />
                       {browseLocation && (
                         <TouchableOpacity
                           onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
@@ -952,7 +951,7 @@ export default function SwipeScreen({ navigation }) {
                   <Ionicons
                     name="grid-outline"
                     size={20}
-                    color="#FFFFFF"
+                    color="#0078FF"
                   />
                   <Text style={styles.categoryText}>
                     All
@@ -1054,17 +1053,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   locationLink: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
     marginTop: 16,
     maxWidth: '100%',
   },
   locationLinkText: {
-    flexShrink: 1,
     color: '#0078FF',
     fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   locationBanner: {
     flexDirection: 'row',
@@ -1250,7 +1247,7 @@ const styles = StyleSheet.create({
     height: '100%', // Fill the drawer height
   },
   lfgSection: {
-    marginRight: 20,
+    marginRight: 10,
   },
   lfgItem: {
     alignItems: 'center',
@@ -1267,7 +1264,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40, // Smaller height
     backgroundColor: '#1A1A1A', // Match navigator border color
-    marginRight: 20,
+    marginRight: 10,
   },
   categoriesContainer: {
     // Remove alignItems from here as it's now in contentContainerStyle
