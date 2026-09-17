@@ -32,6 +32,9 @@ router.get('/search', protect, async (req, res) => {
     // if it's missing still works, just without the pricing benefit.
     const body = {
       input: query,
+      // Forces Latin-script/English results (e.g. "Riyadh" not "الرياض")
+      // instead of each place's native-script name.
+      languageCode: 'en',
       ...(req.query.sessionToken ? { sessionToken: req.query.sessionToken } : {})
     };
 
@@ -92,6 +95,7 @@ router.get('/place/:placeId', protect, async (req, res) => {
     }
 
     const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`);
+    url.searchParams.set('languageCode', 'en');
     if (req.query.sessionToken) {
       url.searchParams.set('sessionToken', req.query.sessionToken);
     }
