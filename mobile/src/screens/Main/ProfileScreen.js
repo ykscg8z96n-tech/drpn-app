@@ -661,7 +661,7 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       {/* Basic Info */}
-      <View style={[styles.section, { marginBottom: 16 }]}>
+      <View style={[styles.section, { marginBottom: 0 }]}>
         <Text style={styles.sectionTitle}>My basics</Text>
         
         {/* Name Field */}
@@ -865,12 +865,12 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={16} color="#666666" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={24} color="#666666" />
           <Text style={styles.actionText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={handleDeleteAccount}>
+        <TouchableOpacity style={[styles.actionButton, styles.lastActionButton]} onPress={handleDeleteAccount}>
           <Ionicons name="trash-outline" size={24} color="#666666" />
           <Text style={styles.actionText}>Delete Account</Text>
         </TouchableOpacity>
@@ -1461,7 +1461,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginLeft: 12,
   },
-  signOutButton: {
+  lastActionButton: {
     borderBottomWidth: 0,
   },
   // Preview Styles (EventCard-like) with Carousel
