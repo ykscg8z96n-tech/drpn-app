@@ -350,6 +350,10 @@ export default function SwipeScreen({ navigation }) {
     openLocationFilter();
   };
 
+  // Reverse-geocoded/searched labels come back as "City, State" or a full
+  // street address - the drawer only has room (and only wants) the city.
+  const cityOnly = (label) => (label || '').split(',')[0].trim();
+
   const selectedRadiusKm = browseLocation?.radiusKm || user?.searchRadius || 25;
 
   const handleSelectRadius = async (km) => {
@@ -471,19 +475,23 @@ export default function SwipeScreen({ navigation }) {
               >
                 {/* Row 1: browse location */}
                 <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
-                  <View style={styles.locationRowNew}>
-                    <TouchableOpacity onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <View>
                       <Ionicons name="location" size={22} color="#0078FF" />
-                    </TouchableOpacity>
+                      {browseLocation && (
+                        <TouchableOpacity
+                          onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.locationClearBadge}
+                        >
+                          <Ionicons name="close-circle" size={14} color="#999999" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     <Text style={styles.locationSmallLabel} numberOfLines={1}>
-                      {browseLocation ? browseLocation.label : (nearMeLabel || 'Locating…')}
+                      {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
                     </Text>
-                    {browseLocation && (
-                      <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={16} color="#999999" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  </TouchableOpacity>
 
                   <View style={styles.radiusPillsRow}>
                     {RADIUS_PRESETS_KM.map((km) => (
@@ -551,12 +559,9 @@ export default function SwipeScreen({ navigation }) {
                     <Ionicons
                       name="grid-outline"
                       size={20}
-                      color={!selectedFilter ? '#0078FF' : '#FFFFFF'}
+                      color="#FFFFFF"
                     />
-                    <Text style={[
-                      styles.categoryText,
-                      { color: !selectedFilter ? '#0078FF' : '#FFFFFF' }
-                    ]}>
+                    <Text style={styles.categoryText}>
                       All
                     </Text>
                   </TouchableOpacity>
@@ -855,19 +860,23 @@ export default function SwipeScreen({ navigation }) {
             >
               {/* Row 1: browse location */}
               <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
-                <View style={styles.locationRowNew}>
-                  <TouchableOpacity onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <View>
                     <Ionicons name="location" size={22} color="#0078FF" />
-                  </TouchableOpacity>
+                    {browseLocation && (
+                      <TouchableOpacity
+                        onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.locationClearBadge}
+                      >
+                        <Ionicons name="close-circle" size={14} color="#999999" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={styles.locationSmallLabel} numberOfLines={1}>
-                    {browseLocation ? browseLocation.label : (nearMeLabel || 'Locating…')}
+                    {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
                   </Text>
-                  {browseLocation && (
-                    <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="close-circle" size={16} color="#999999" />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.radiusPillsRow}>
                   {RADIUS_PRESETS_KM.map((km) => (
@@ -935,12 +944,9 @@ export default function SwipeScreen({ navigation }) {
                   <Ionicons
                     name="grid-outline"
                     size={20}
-                    color={!selectedFilter ? '#0078FF' : '#FFFFFF'}
+                    color="#FFFFFF"
                   />
-                  <Text style={[
-                    styles.categoryText,
-                    { color: !selectedFilter ? '#0078FF' : '#FFFFFF' }
-                  ]}>
+                  <Text style={styles.categoryText}>
                     All
                   </Text>
                 </TouchableOpacity>
@@ -1186,37 +1192,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     height: '33.33%',
   },
-  locationFilterRow: {
-    flexDirection: 'row',
+  locationIconTextCol: {
     alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: '#1A1A1A',
-    borderWidth: 1,
-    borderColor: '#333333',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    maxWidth: '100%',
-  },
-  locationFilterRowText: {
-    flexShrink: 1,
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  locationRowNew: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
+    justifyContent: 'center',
+    width: 60,
     marginRight: 12,
   },
+  locationClearBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -12,
+  },
   locationSmallLabel: {
-    flexShrink: 1,
-    color: '#999999',
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 10, // Match the "All" category label's small font
     fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
   },
   radiusPillsRow: {
     flexDirection: 'row',
@@ -1258,7 +1250,7 @@ const styles = StyleSheet.create({
   },
   lfgText: {
     color: '#FFFFFF',
-    fontSize: 12, // Match navigator text size
+    fontSize: 10, // Match the "All" category label's small font
     fontWeight: '500',
     marginTop: 4,
   },
