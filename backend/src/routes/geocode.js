@@ -5,6 +5,22 @@ const { protect } = require('../middleware/auth');
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
+// @route   GET /api/geocode/maps-key
+// @desc    Hand the web client the key it needs to load the Google Maps
+//          JavaScript SDK itself (the Browse Location map). This is not a
+//          secret leak - any page embedding Maps JS exposes its key in the
+//          page source by design; Google's own docs say to lock it down
+//          with an HTTP referrer restriction on the key instead. Keep that
+//          restriction on a key used here, since (unlike the server-side
+//          Places calls above) this one really is loaded in the browser.
+// @access  Private
+router.get('/maps-key', protect, (req, res) => {
+  if (!GOOGLE_PLACES_API_KEY) {
+    return res.status(503).json({ success: false, message: 'Maps is not configured' });
+  }
+  res.json({ success: true, data: { apiKey: GOOGLE_PLACES_API_KEY } });
+});
+
 // @route   GET /api/geocode/search
 // @desc    Address/POI autocomplete - proxies Google Places Autocomplete
 //          (New) so the client never needs its own API key. Returns bare
