@@ -275,26 +275,17 @@ userSchema.methods.resetPremiumLimits = function() {
   }
 };
 
-// Check if user can use super like
+// Super like is premium-only - no free daily allowance.
 userSchema.methods.canUseSuperLike = function() {
-  this.resetPremiumLimits();
-  
-  if (this.isPremium) {
-    return true; // Unlimited for premium users
-  }
-  
-  return this.premium.superLikesUsed < 1; // 1 free per day
+  return this.isPremium && this.premiumExpiresAt && new Date(this.premiumExpiresAt) > new Date();
 };
 
-// Check if user can use rewind
+// Rewind is also premium-only, capped at 5/day even for premium.
 userSchema.methods.canUseRewind = function() {
+  const hasPremium = this.isPremium && this.premiumExpiresAt && new Date(this.premiumExpiresAt) > new Date();
+  if (!hasPremium) return false;
   this.resetPremiumLimits();
-  
-  if (this.isPremium) {
-    return this.premium.rewindsUsed < 5; // 5 per day for premium
-  }
-  
-  return false; // No rewinds for free users
+  return this.premium.rewindsUsed < 5;
 };
 
 // Get user's recent swipes (for preventing duplicates)

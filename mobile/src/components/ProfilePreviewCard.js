@@ -79,7 +79,15 @@ export default function ProfilePreviewCard({ profile }) {
       </View>
 
       <View style={styles.previewContent}>
-        <Text style={styles.previewName}>{profile?.name || 'Unknown'}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.previewName}>{profile?.name || 'Unknown'}</Text>
+          {profile?.isSuperSwipe && (
+            <View style={styles.superSwipeBadge}>
+              <Ionicons name="flash" size={12} color="white" />
+              <Text style={styles.superSwipeBadgeText}>Super Swipe</Text>
+            </View>
+          )}
+        </View>
 
         {userAge && (
           <Text style={styles.previewAge}>{userAge} years old</Text>
@@ -176,11 +184,30 @@ const styles = StyleSheet.create({
   previewContent: {
     padding: 20,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
   previewName: {
     fontSize: 26,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+  },
+  superSwipeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0078FF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  superSwipeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   previewAge: {
     fontSize: 16,

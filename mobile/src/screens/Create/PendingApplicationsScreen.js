@@ -79,6 +79,14 @@ const UserItem = ({
                 <Ionicons name="star" size={12} color="white" />
               </View>
             )}
+
+            {/* Super swipe badge - only pending applicants can have one
+                (isSuperSwipe isn't set on accepted/owner entries). */}
+            {user.isSuperSwipe && (
+              <View style={styles.superSwipeBadge}>
+                <Ionicons name="flash" size={12} color="white" />
+              </View>
+            )}
           </View>
         </View>
 
@@ -89,6 +97,9 @@ const UserItem = ({
               <Text style={styles.userName}>{user.name}</Text>
               {isTargetOwner && (
                 <Text style={styles.organizerLabel}>Owner</Text>
+              )}
+              {user.isSuperSwipe && (
+                <Text style={styles.superSwipeLabel}>Super Swipe</Text>
               )}
             </View>
 
@@ -218,15 +229,22 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         
         const applicants = eventData.applicants || [];
         
-        // Separate pending and accepted users
+        // Separate pending and accepted users - a super swipe jumps to
+        // the top of pending (that's the whole point of paying for one),
+        // otherwise oldest-applied-first.
         const pending = applicants
           .filter(app => app.status === 'pending')
           .map(app => ({
             ...app.userId,
             appliedAt: app.appliedAt,
             applicationId: app._id,
-            application: app.application
-          }));
+            application: app.application,
+            isSuperSwipe: app.isSuperSwipe || false
+          }))
+          .sort((a, b) => {
+            if (a.isSuperSwipe !== b.isSuperSwipe) return a.isSuperSwipe ? -1 : 1;
+            return new Date(a.appliedAt) - new Date(b.appliedAt);
+          });
           
         const accepted = applicants
           .filter(app => app.status === 'accepted')
@@ -729,7 +747,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#000000',
   },
-  
+  // Bottom-right, not top-right - a super swipe is only ever on a
+  // pending applicant, which already has the clock badge up there.
+  superSwipeBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#0078FF',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
+  },
+
   // Center Section - User Info
   centerSection: {
     flex: 1,
@@ -755,7 +788,12 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontWeight: '500',
   },
-  
+  superSwipeLabel: {
+    fontSize: 12,
+    color: '#0078FF',
+    fontWeight: '500',
+  },
+
   // Right Section - Actions
   rightSection: {
     alignItems: 'flex-end',
