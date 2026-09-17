@@ -440,10 +440,10 @@ export default function SwipeScreen({ navigation }) {
               <Text style={styles.refreshButtonText}>Clear Filter</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.locationLink} onPress={openLocationFilter}>
-            <Ionicons name="location-outline" size={16} color="#0078FF" />
+          <TouchableOpacity style={styles.locationLink} onPress={openFilterDrawer}>
+            <Ionicons name="location-outline" size={16} color="#FFD700" />
             <Text style={styles.locationLinkText}>
-              {browseLocation ? 'Change browse location' : 'Browse events somewhere else'}
+              Try expanding your radius, or premium to adjust your location
             </Text>
           </TouchableOpacity>
         </View>
@@ -1055,11 +1055,13 @@ const styles = StyleSheet.create({
   },
   locationLink: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 6,
     marginTop: 16,
+    maxWidth: '100%',
   },
   locationLinkText: {
+    flexShrink: 1,
     color: '#0078FF',
     fontSize: 14,
     fontWeight: '600',
