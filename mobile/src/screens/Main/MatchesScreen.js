@@ -264,9 +264,13 @@ export default function MatchesScreen({ navigation }) {
         api.get('/private-connections'),
       ]);
 
-      const events = (eventsRes.data.success ? eventsRes.data.data : []).map(i => transformEventOrGroup(i, 'event'));
-      const groups = (groupsRes.data.success ? groupsRes.data.data : []).map(i => transformEventOrGroup(i, 'group'));
-      const privates = (privateRes.data.success ? privateRes.data.data : []).map(transformPrivate);
+      // A participation whose event/group was deleted out from under it
+      // (or a private connection missing its other user) has nothing
+      // meaningful to show - drop it here rather than letting it count
+      // toward "this section has chats" while rendering as a blank row.
+      const events = (eventsRes.data.success ? eventsRes.data.data : []).map(i => transformEventOrGroup(i, 'event')).filter(m => m.name);
+      const groups = (groupsRes.data.success ? groupsRes.data.data : []).map(i => transformEventOrGroup(i, 'group')).filter(m => m.name);
+      const privates = (privateRes.data.success ? privateRes.data.data : []).map(transformPrivate).filter(m => m.name);
 
       setMatchesByType({ event: events, group: groups, private: privates });
     } catch (error) {
