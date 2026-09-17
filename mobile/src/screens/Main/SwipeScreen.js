@@ -25,6 +25,7 @@ import { USE_MOCK_API } from '../../utils/constants';
 import LocationFilterModal from '../../components/LocationFilterModal';
 
 const DEMO_LOCATION = { latitude: 30.2672, longitude: -97.7431 };
+const RADIUS_PRESETS_KM = [10, 25, 50, 100];
 
 const { height: windowHeight, width: windowWidth } = Dimensions.get('window');
 
@@ -43,6 +44,7 @@ export default function SwipeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [cardIndex, setCardIndex] = useState(0);
   const [userLocation, setUserLocation] = useState(null);
+  const [nearMeLabel, setNearMeLabel] = useState('');
   const [cardExpanded, setCardExpanded] = useState(false);
   // Measured directly from the actual rendered area instead of guessed
   // from Dimensions.get('window') minus estimated chrome heights - the
@@ -60,7 +62,7 @@ export default function SwipeScreen({ navigation }) {
   // card ends exactly where the buttons actually start.
   const [buttonRowHeight, setButtonRowHeight] = useState(72);
   const swiperRef = useRef(null);
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const insets = useSafeAreaInsets();
   const {
     selectedFilter,
@@ -100,6 +102,24 @@ export default function SwipeScreen({ navigation }) {
       fetchNearbyEvents();
     }
   }, [userLocation, browseLocation, user, selectedFilter, selectedTypeFilter]);
+
+  // Reverse-geocodes the device's own location to a city name so "near
+  // me" reads as somewhere real (e.g. "Toronto, ON") instead of either
+  // raw coordinates or a static "Near me" label.
+  useEffect(() => {
+    if (!userLocation) return;
+    let cancelled = false;
+    api.get('/geocode/reverse', { params: { lat: userLocation.latitude, lon: userLocation.longitude } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const resolved = data?.data;
+        if (resolved?.address || resolved?.fullAddress) {
+          setNearMeLabel(resolved.address || resolved.fullAddress);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userLocation?.latitude, userLocation?.longitude]);
 
   // Play a one-time "these are swipeable / this is filterable" hint once
   // the first batch of cards has loaded.
@@ -317,6 +337,34 @@ export default function SwipeScreen({ navigation }) {
     sendSuperLike(events[index]._id);
   };
 
+  // The pin only ever opens the "search somewhere else" map - browsing
+  // your own location's radius is free, picking a different city isn't.
+  const handleLocationPinPress = () => {
+    if (!user?.isPremium) {
+      Alert.alert(
+        'Premium Feature',
+        'Browsing other locations is a premium feature. Start your free trial from Profile to search anywhere.'
+      );
+      return;
+    }
+    openLocationFilter();
+  };
+
+  const selectedRadiusKm = browseLocation?.radiusKm || user?.searchRadius || 25;
+
+  const handleSelectRadius = async (km) => {
+    if (browseLocation) {
+      setBrowseLocation({ ...browseLocation, radiusKm: km });
+      return;
+    }
+    try {
+      await api.put('/users/profile', { searchRadius: km });
+      updateUser({ ...user, searchRadius: km });
+    } catch (error) {
+      console.error('Failed to update search radius:', error);
+    }
+  };
+
   // Rewind isn't actually implemented yet - there's no backend endpoint
   // to undo the last swipe (would need to pop it from User.swipes and
   // roll back any applicant entry it created). This still only gets as
@@ -422,18 +470,34 @@ export default function SwipeScreen({ navigation }) {
                 onPress={(e) => e.stopPropagation()}
               >
                 {/* Row 1: browse location */}
-                <View style={styles.filterRow}>
-                  <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
-                    <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
-                    <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
-                      {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+                <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
+                  <View style={styles.locationRowNew}>
+                    <TouchableOpacity onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="location" size={22} color="#0078FF" />
+                    </TouchableOpacity>
+                    <Text style={styles.locationSmallLabel} numberOfLines={1}>
+                      {browseLocation ? browseLocation.label : (nearMeLabel || 'Locating…')}
                     </Text>
                     {browseLocation && (
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="close-circle" size={16} color="#999999" />
                       </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.radiusPillsRow}>
+                    {RADIUS_PRESETS_KM.map((km) => (
+                      <TouchableOpacity
+                        key={km}
+                        style={[styles.radiusPill, selectedRadiusKm === km && styles.radiusPillActive]}
+                        onPress={() => handleSelectRadius(km)}
+                      >
+                        <Text style={[styles.radiusPillText, selectedRadiusKm === km && styles.radiusPillTextActive]}>
+                          {km}km
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
 
                 {/* Row 2: type filter */}
@@ -790,18 +854,34 @@ export default function SwipeScreen({ navigation }) {
               onPress={(e) => e.stopPropagation()}
             >
               {/* Row 1: browse location */}
-              <View style={styles.filterRow}>
-                <TouchableOpacity style={styles.locationFilterRow} onPress={openLocationFilter}>
-                  <Ionicons name="location-outline" size={18} color={browseLocation ? '#0078FF' : '#FFFFFF'} />
-                  <Text style={[styles.locationFilterRowText, browseLocation && { color: '#0078FF' }]} numberOfLines={1}>
-                    {browseLocation ? `${browseLocation.label} · ${browseLocation.radiusKm}km` : 'Near me'}
+              <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
+                <View style={styles.locationRowNew}>
+                  <TouchableOpacity onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="location" size={22} color="#0078FF" />
+                  </TouchableOpacity>
+                  <Text style={styles.locationSmallLabel} numberOfLines={1}>
+                    {browseLocation ? browseLocation.label : (nearMeLabel || 'Locating…')}
                   </Text>
                   {browseLocation && (
-                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity onPress={clearBrowseLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle" size={16} color="#999999" />
                     </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                </View>
+
+                <View style={styles.radiusPillsRow}>
+                  {RADIUS_PRESETS_KM.map((km) => (
+                    <TouchableOpacity
+                      key={km}
+                      style={[styles.radiusPill, selectedRadiusKm === km && styles.radiusPillActive]}
+                      onPress={() => handleSelectRadius(km)}
+                    >
+                      <Text style={[styles.radiusPillText, selectedRadiusKm === km && styles.radiusPillTextActive]}>
+                        {km}km
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {/* Row 2: type filter */}
@@ -1124,6 +1204,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+  },
+  locationRowNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+    marginRight: 12,
+  },
+  locationSmallLabel: {
+    flexShrink: 1,
+    color: '#999999',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  radiusPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  radiusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  radiusPillActive: {
+    backgroundColor: '#0078FF',
+    borderColor: '#0078FF',
+  },
+  radiusPillText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  radiusPillTextActive: {
+    fontWeight: '700',
   },
   drawerContent: {
     flexDirection: 'column',
