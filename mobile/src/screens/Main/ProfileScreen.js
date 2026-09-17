@@ -661,7 +661,7 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       {/* Basic Info */}
-      <View style={styles.section}>
+      <View style={[styles.section, { marginBottom: 16 }]}>
         <Text style={styles.sectionTitle}>My basics</Text>
         
         {/* Name Field */}
@@ -694,32 +694,6 @@ export default function ProfileScreen({ navigation }) {
               </TouchableOpacity>
             )}
           </View>
-        </View>
-
-        {/* Verification - one-way action, not an editable value, so no
-            Edit/Cancel/Save cycle like the other fields, just a button
-            that's gone once verified. */}
-        <View style={styles.editableInfoItem}>
-          <View style={styles.infoRow}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#666666" />
-            <View style={styles.inputContainer}>
-              <View style={styles.verifiedRow}>
-                <Text style={styles.fieldValue}>
-                  {profile?.isVerified ? 'Verified' : 'Not verified'}
-                </Text>
-                {profile?.isVerified && (
-                  <Ionicons name="checkmark-circle" size={16} color="#0078FF" />
-                )}
-              </View>
-            </View>
-          </View>
-          {!profile?.isVerified && (
-            <View style={styles.editButtonContainer}>
-              <TouchableOpacity style={styles.editButton} onPress={handleGetVerified}>
-                <Text style={styles.editButtonText}>Get Verified</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         {/* Birthday Field - matches Name/Location: plain text + Edit
@@ -841,10 +815,21 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Actions */}
       <View style={styles.actionsSection}>
-        {/* Verification has its own row up in "My basics" (with a
-            Get Verified button that's actually wired up) - this used to
-            be a second, unwired "Get Verified" entry here that did
-            nothing when tapped. */}
+        {/* Verification - one-way action, so once verified it's a plain
+            (non-tappable) row like Premium's active state, not a button. */}
+        {profile?.isVerified ? (
+          <View style={styles.actionButton}>
+            <Ionicons name="shield-checkmark" size={24} color="#0078FF" />
+            <Text style={styles.actionText}>Verified</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.actionButton} onPress={handleGetVerified}>
+            <Ionicons name="shield-checkmark-outline" size={24} color="#0078FF" />
+            <Text style={styles.actionText}>Get Verified</Text>
+            <Ionicons name="chevron-forward" size={16} color="#666666" />
+          </TouchableOpacity>
+        )}
+
         {profile?.isPremium ? (
           <View style={styles.actionButton}>
             <Ionicons name="star" size={24} color="#FFD700" />
@@ -881,13 +866,13 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.actionButton, styles.signOutButton]} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={24} color="#FF6B6B" />
-          <Text style={[styles.actionText, styles.signOutText]}>Sign Out</Text>
+          <Ionicons name="log-out-outline" size={24} color="#666666" />
+          <Text style={styles.actionText}>Sign Out</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleDeleteAccount}>
-          <Ionicons name="trash-outline" size={24} color="#FF3B30" />
-          <Text style={[styles.actionText, styles.signOutText]}>Delete Account</Text>
+          <Ionicons name="trash-outline" size={24} color="#666666" />
+          <Text style={styles.actionText}>Delete Account</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -1479,10 +1464,6 @@ const styles = StyleSheet.create({
   signOutButton: {
     borderBottomWidth: 0,
   },
-  signOutText: {
-    color: '#FF6B6B',
-  },
-
   // Preview Styles (EventCard-like) with Carousel
   previewCard: {
     margin: 16,
