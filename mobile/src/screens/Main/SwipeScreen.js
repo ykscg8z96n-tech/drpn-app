@@ -274,7 +274,28 @@ export default function SwipeScreen({ navigation }) {
   // Super swipe is premium-only, no free daily allowance - the server
   // enforces this too (POST /users/swipe), this is just so an
   // unverified/non-premium user gets a clear prompt instead of a 403.
-  const handleSuperLike = async () => {
+  const sendSuperLike = async (eventId) => {
+    try {
+      await api.post('/users/swipe', {
+        eventId,
+        action: 'super_like'
+      });
+
+      console.log('✅ Super like sent for event:', eventId);
+
+      Alert.alert(
+        'Super Application Sent! ⚡',
+        'Your priority application has been sent! This will appear at the top of the organizer\'s list, and they\'ve been notified.',
+        [{ text: 'Awesome!', style: 'default' }]
+      );
+    } catch (error) {
+      console.error('Error sending super like:', error);
+      console.error('Error details:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to send super like');
+    }
+  };
+
+  const handleSuperLike = () => {
     if (!user?.isPremium) {
       Alert.alert(
         'Premium Feature',
@@ -282,30 +303,18 @@ export default function SwipeScreen({ navigation }) {
       );
       return;
     }
-
     if (events[cardIndex]) {
-      try {
-        await api.post('/users/swipe', {
-          eventId: events[cardIndex]._id,
-          action: 'super_like'
-        });
-
-        console.log('✅ Super like sent for event:', events[cardIndex]._id);
-
-        // Show success message for super like
-        Alert.alert(
-          'Super Application Sent! ⚡',
-          'Your priority application has been sent! This will appear at the top of the organizer\'s list, and they\'ve been notified.',
-          [{ text: 'Awesome!', style: 'default' }]
-        );
-
-        swiperRef.current?.swipeTop();
-      } catch (error) {
-        console.error('Error sending super like:', error);
-        console.error('Error details:', error.response?.data);
-        Alert.alert('Error', error.response?.data?.message || 'Failed to send super like');
-      }
+      swiperRef.current?.swipeTop();
     }
+  };
+
+  // Fires after the card has already animated away from a swipe-up
+  // gesture (as opposed to the super-like button, which triggers this
+  // same swipeTop() programmatically) - disableTopSwipe below keeps
+  // non-premium users from ever reaching this in the first place, so no
+  // premium check is needed here.
+  const onSwipedTop = (index) => {
+    sendSuperLike(events[index]._id);
   };
 
   // Rewind isn't actually implemented yet - there's no backend endpoint
@@ -629,12 +638,13 @@ export default function SwipeScreen({ navigation }) {
             animateOverlayLabelsOpacity
             animateCardOpacity
             swipeBackCard
-            disableTopSwipe={cardExpanded}
+            disableTopSwipe={cardExpanded || !user?.isPremium}
             disableBottomSwipe={cardExpanded}
             disableLeftSwipe={cardExpanded}
             disableRightSwipe={cardExpanded}
             onSwipedLeft={(index) => onSwipe('left', events[index]._id)}
             onSwipedRight={(index) => onSwipe('right', events[index]._id)}
+            onSwipedTop={onSwipedTop}
             overlayLabels={{
               left: {
                 title: 'PASS',
