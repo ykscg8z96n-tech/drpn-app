@@ -474,24 +474,28 @@ export default function SwipeScreen({ navigation }) {
                 onPress={(e) => e.stopPropagation()}
               >
                 {/* Row 1: browse location */}
-                <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
-                  <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <View>
-                      <Ionicons name="location" size={22} color="#0078FF" />
-                      {browseLocation && (
-                        <TouchableOpacity
-                          onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          style={styles.locationClearBadge}
-                        >
-                          <Ionicons name="close-circle" size={14} color="#999999" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.locationSmallLabel} numberOfLines={1}>
-                      {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
-                    </Text>
-                  </TouchableOpacity>
+                <View style={styles.filterRow}>
+                  <View style={styles.lfgSection}>
+                    <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <View>
+                        <Ionicons name="location" size={22} color="#0078FF" />
+                        {browseLocation && (
+                          <TouchableOpacity
+                            onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={styles.locationClearBadge}
+                          >
+                            <Ionicons name="close-circle" size={14} color="#999999" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text style={styles.locationSmallLabel} numberOfLines={1}>
+                        {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.divider} />
 
                   <View style={styles.radiusPillsRow}>
                     {RADIUS_PRESETS_KM.map((km) => (
@@ -859,24 +863,28 @@ export default function SwipeScreen({ navigation }) {
               onPress={(e) => e.stopPropagation()}
             >
               {/* Row 1: browse location */}
-              <View style={[styles.filterRow, { justifyContent: 'space-between' }]}>
-                <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <View>
-                    <Ionicons name="location" size={22} color="#0078FF" />
-                    {browseLocation && (
-                      <TouchableOpacity
-                        onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={styles.locationClearBadge}
-                      >
-                        <Ionicons name="close-circle" size={14} color="#999999" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <Text style={styles.locationSmallLabel} numberOfLines={1}>
-                    {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.filterRow}>
+                <View style={styles.lfgSection}>
+                  <TouchableOpacity style={styles.locationIconTextCol} onPress={handleLocationPinPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <View>
+                      <Ionicons name="location" size={22} color="#0078FF" />
+                      {browseLocation && (
+                        <TouchableOpacity
+                          onPress={(e) => { e.stopPropagation(); clearBrowseLocation(); }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.locationClearBadge}
+                        >
+                          <Ionicons name="close-circle" size={14} color="#999999" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={styles.locationSmallLabel} numberOfLines={1}>
+                      {cityOnly(browseLocation ? browseLocation.label : nearMeLabel) || 'Locating…'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.divider} />
 
                 <View style={styles.radiusPillsRow}>
                   {RADIUS_PRESETS_KM.map((km) => (
@@ -1196,7 +1204,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 60,
-    marginRight: 12,
   },
   locationClearBadge: {
     position: 'absolute',
