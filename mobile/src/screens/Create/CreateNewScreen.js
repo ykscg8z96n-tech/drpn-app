@@ -44,6 +44,8 @@ const STOCK_IMAGES = {
   health: require('../../../assets/stock-images/health-stock.jpg'),
 };
 
+const DEFAULT_LOGO_IMAGE = require('../../assets/logo.png');
+
 export default function CreateNewScreen({ route, navigation }) {
   const { type } = route.params;
   const { user } = useAuth();
@@ -114,8 +116,8 @@ export default function CreateNewScreen({ route, navigation }) {
     if (formData.category && STOCK_IMAGES[formData.category]) {
       return STOCK_IMAGES[formData.category];
     }
-    // Default to tabletop if no category selected
-    return STOCK_IMAGES.tabletop;
+    // No category selected yet - show the DRPN logo instead of guessing a category.
+    return DEFAULT_LOGO_IMAGE;
   };
 
   useEffect(() => {
@@ -350,54 +352,6 @@ export default function CreateNewScreen({ route, navigation }) {
             {renderCategories()}
           </View>
 
-          {/* Event Photo Picker */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Event Photo</Text>
-            <Text style={styles.helperText}>
-              Add a photo or we'll use a default image based on your category
-            </Text>
-            
-            <View style={styles.photoContainer}>
-              <View style={styles.photoPreview}>
-                <Image 
-                  source={getDisplayImage()} 
-                  style={styles.photoImage}
-                  resizeMode="cover"
-                />
-                {selectedImage && (
-                  <TouchableOpacity 
-                    style={styles.removePhotoButton}
-                    onPress={removeImage}
-                  >
-                    <Ionicons name="close-circle" size={24} color="#FF4444" />
-                  </TouchableOpacity>
-                )}
-              </View>
-              
-              <View style={styles.photoActions}>
-                <TouchableOpacity 
-                  style={styles.photoButton}
-                  onPress={pickImage}
-                >
-                  <Ionicons name="camera" size={20} color="#0078FF" />
-                  <Text style={styles.photoButtonText}>
-                    {selectedImage ? 'Change Photo' : 'Add Photo'}
-                  </Text>
-                </TouchableOpacity>
-                
-                {selectedImage && (
-                  <TouchableOpacity 
-                    style={styles.photoButtonSecondary}
-                    onPress={removeImage}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#FF4444" />
-                    <Text style={styles.photoButtonSecondaryText}>Remove</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Location</Text>
             <Text style={styles.helperText}>
@@ -502,6 +456,54 @@ export default function CreateNewScreen({ route, navigation }) {
               />
             </View>
           )}
+
+          {/* Event Photo Picker */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Event Photo</Text>
+            <Text style={styles.helperText}>
+              Add a photo or we'll use a default image based on your category
+            </Text>
+
+            <View style={styles.photoContainer}>
+              <View style={styles.photoPreview}>
+                <Image
+                  source={getDisplayImage()}
+                  style={styles.photoImage}
+                  resizeMode={!selectedImage && !formData.category ? 'contain' : 'cover'}
+                />
+                {selectedImage && (
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={removeImage}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#FF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.photoActions}>
+                <TouchableOpacity
+                  style={styles.photoButton}
+                  onPress={pickImage}
+                >
+                  <Ionicons name="camera" size={20} color="#0078FF" />
+                  <Text style={styles.photoButtonText}>
+                    {selectedImage ? 'Change Photo' : 'Add Photo'}
+                  </Text>
+                </TouchableOpacity>
+
+                {selectedImage && (
+                  <TouchableOpacity
+                    style={styles.photoButtonSecondary}
+                    onPress={removeImage}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FF4444" />
+                    <Text style={styles.photoButtonSecondaryText}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
 
           {/* Auto-invite existing groups - lets one group's members join
               another (e.g. inviting a poker group into a fantasy football
