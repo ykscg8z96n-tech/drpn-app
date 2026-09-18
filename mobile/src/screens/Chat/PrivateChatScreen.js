@@ -633,7 +633,16 @@ export default function PrivateChatScreen({ route, navigation }) {
         </TouchableOpacity>
       )}
 
-      {renderInputArea()}
+      {isBlocked ? (
+        <View style={styles.blockedBanner}>
+          <Ionicons name="ban-outline" size={16} color="#999999" />
+          <Text style={styles.blockedBannerText}>
+            This conversation is blocked. Unblock from the options menu above to send messages again.
+          </Text>
+        </View>
+      ) : (
+        renderInputArea()
+      )}
 
       <ActionSheet
         visible={showOptionsSheet}
@@ -922,6 +931,22 @@ const styles = StyleSheet.create({
     borderTopColor: '#333333',
     paddingHorizontal: 16,
     paddingVertical: 8,
+  },
+  blockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#111111',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  blockedBannerText: {
+    flex: 1,
+    color: '#999999',
+    fontSize: 13,
+    lineHeight: 18,
   },
   inputWrapper: {
     flexDirection: 'row',
