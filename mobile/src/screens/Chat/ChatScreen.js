@@ -320,7 +320,12 @@ export default function ChatScreen({ route, navigation }) {
         <View style={styles.headerRightRow}>
           <TouchableOpacity
             style={styles.headerParticipantsButton}
-            onPress={() => eventData && navigation.navigate('PendingApplications', { event: eventData })}
+            // PendingApplications only lives in the Home tab's stack
+            // (CreateStack) - a bare navigate('PendingApplications', …)
+            // from here (the Chats tab's stack) has no matching screen to
+            // find and silently does nothing. The nested form below
+            // switches tabs and pushes onto that stack directly.
+            onPress={() => eventData && navigation.navigate('Home', { screen: 'PendingApplications', params: { event: eventData } })}
           >
             <Ionicons name="people-outline" size={22} color="#0078FF" />
           </TouchableOpacity>
