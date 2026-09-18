@@ -1,32 +1,20 @@
 // mobile/src/components/ProfilePreviewCard.js
 //
 // The same card shown on your own Profile screen's "Preview" tab - photo
-// carousel, name/age, About - reused wherever someone else's profile
-// needs to be shown the same way (e.g. tapping a roster/pending row).
+// carousel, name, About - reused wherever someone else's profile needs
+// to be shown the same way (e.g. tapping a roster/pending row). Age is
+// deliberately not shown here - it's collected only to enforce the
+// minimum-age requirement, not to display to other users.
 import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const { height } = Dimensions.get('window');
 
-const calculateAge = (birthDate) => {
-  if (!birthDate) return null;
-  const [year, month, day] = birthDate.split('T')[0].split('-').map(Number);
-  const birth = new Date(year, month - 1, day);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
-};
-
 export default function ProfilePreviewCard({ profile }) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const photos = profile?.photos || [];
   const hasPhotos = photos.length > 0;
-  const userAge = calculateAge(profile?.birthDate || profile?.birthdate);
 
   const prevPhoto = () => {
     setCurrentPhotoIndex((i) => (i === 0 ? photos.length - 1 : i - 1));
@@ -88,10 +76,6 @@ export default function ProfilePreviewCard({ profile }) {
             </View>
           )}
         </View>
-
-        {userAge && (
-          <Text style={styles.previewAge}>{userAge} years old</Text>
-        )}
 
         {profile?.bio ? (
           <View style={styles.aboutSection}>
