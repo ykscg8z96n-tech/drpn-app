@@ -261,12 +261,12 @@ export default function ProfileScreen({ navigation }) {
 
   // No payment processor hooked up yet - this is the whole "subscribe"
   // flow for now, a one-time 7-day trial. Gates premium-only swipe
-  // features (unlimited super-likes/rewinds - see the premium
-  // middleware and User.canSuperLike/canRewind).
+  // features (unlimited super-likes, 3 rewinds/day - see the premium
+  // middleware and User.canUseSuperLike/canUseRewind).
   const handleStartPremiumTrial = () => {
     Alert.alert(
       'Start Free Trial',
-      "Try Premium free for 7 days - unlimited super-likes and rewinds. You can only claim this once.",
+      "Try Premium free for 7 days - unlimited super-likes and 3 rewinds a day. You can only claim this once.",
       [
         { text: 'Not Now', style: 'cancel' },
         {

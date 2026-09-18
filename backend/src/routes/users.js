@@ -607,6 +607,81 @@ router.get('/swipe-history', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/rewind-status
+// @desc    How many rewinds the user has left today (0 if not premium),
+//          and whether there's actually a passed card to bring back -
+//          read-only, so the confirm dialog can say "you have N left"
+//          before POST /rewind actually consumes one.
+// @access  Private
+router.get('/rewind-status', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const hasPremium = user.isPremium && user.premiumExpiresAt && new Date(user.premiumExpiresAt) > new Date();
+    user.resetPremiumLimits();
+
+    res.json({
+      success: true,
+      data: {
+        isPremium: !!hasPremium,
+        remaining: hasPremium ? Math.max(0, User.DAILY_REWIND_LIMIT - user.premium.rewindsUsed) : 0,
+        dailyLimit: User.DAILY_REWIND_LIMIT,
+        hasPassToRewind: !!user.getLastPassSwipe()
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/users/rewind
+// @desc    Undo the most recent 'pass' swipe, bringing that event back
+//          for the swipe deck to show again. Premium-only, capped at
+//          User.DAILY_REWIND_LIMIT/day (resets daily; which pass comes
+//          back next does not - see User.getLastPassSwipe). Re-checks
+//          premium/limit server-side rather than trusting the client's
+//          rewind-status read.
+// @access  Private
+router.post('/rewind', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user.canUseRewind()) {
+      return res.status(403).json({
+        success: false,
+        message: user.isPremium
+          ? "You're out of rewinds for today - they reset tomorrow."
+          : 'Rewind is a premium feature - start your free trial from Profile.'
+      });
+    }
+
+    const lastPass = user.getLastPassSwipe();
+    if (!lastPass) {
+      return res.status(400).json({ success: false, message: "You haven't passed on anything yet" });
+    }
+
+    const eventId = lastPass.targetId;
+    user.swipes = user.swipes.filter(s => s._id.toString() !== lastPass._id.toString());
+    user.premium.rewindsUsed += 1;
+    await user.save();
+
+    const event = await Event.findById(eventId).populate('organizer', 'name photos').lean();
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'That event no longer exists' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        event,
+        remaining: Math.max(0, User.DAILY_REWIND_LIMIT - user.premium.rewindsUsed)
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/events
 // @desc    Get user's event history (joined and organized)
 // @access  Private

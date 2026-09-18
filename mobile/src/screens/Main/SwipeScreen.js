@@ -379,16 +379,63 @@ export default function SwipeScreen({ navigation }) {
     }
   };
 
-  // Rewind isn't actually implemented yet - there's no backend endpoint
-  // to undo the last swipe (would need to pop it from User.swipes and
-  // roll back any applicant entry it created). This still only gets as
-  // far as the premium check so free users get a consistent prompt.
+  // Brings back the most recent event/group passed on (GET /users/rewind-
+  // status is read-only, just for the "you have N left" confirm prompt;
+  // POST /users/rewind is what actually consumes one and re-checks
+  // premium/the daily cap server-side). Rewinding twice in a row walks
+  // back one further pass each time - see User.getLastPassSwipe.
   const handleRewind = async () => {
     if (!user?.isPremium) {
-      Alert.alert('Premium Feature', 'Rewind is premium-only. Start your free trial from Profile to use it.');
+      Alert.alert(
+        'Premium Feature',
+        'Rewind brings back the last event or group you passed on. Premium includes 3 rewinds per day. Start your free trial from Profile to use it.'
+      );
       return;
     }
-    Alert.alert('Rewind', 'Rewind feature coming soon!');
+    try {
+      const response = await api.get('/users/rewind-status');
+      if (!response.data.success) return;
+      const { remaining, hasPassToRewind } = response.data.data;
+
+      if (!hasPassToRewind) {
+        Alert.alert('Nothing to Rewind', "You haven't passed on anything yet.");
+        return;
+      }
+      if (remaining <= 0) {
+        Alert.alert('Out of Rewinds', "You're out of rewinds for today - they reset tomorrow.");
+        return;
+      }
+
+      Alert.alert(
+        'Rewind',
+        `You have ${remaining} rewind${remaining === 1 ? '' : 's'} left today. Bring back the last card you passed on?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Rewind', onPress: performRewind },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to check rewind status');
+    }
+  };
+
+  // Splices the rewound event back in right at the current card, so it's
+  // the very next thing shown - rather than at the end of the deck where
+  // it might not resurface again this session.
+  const performRewind = async () => {
+    try {
+      const response = await api.post('/users/rewind');
+      if (response.data.success) {
+        const { event } = response.data.data;
+        setEvents(prev => {
+          const next = [...prev];
+          next.splice(cardIndex, 0, event);
+          return next;
+        });
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to rewind');
+    }
   };
 
   // Show loading only if we have a user but are still loading
