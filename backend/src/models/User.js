@@ -290,12 +290,29 @@ userSchema.methods.canUseSuperLike = function() {
   return this.isPremium && this.premiumExpiresAt && new Date(this.premiumExpiresAt) > new Date();
 };
 
-// Rewind is also premium-only, capped at 5/day even for premium.
+// Rewind is also premium-only, capped at DAILY_REWIND_LIMIT/day even for
+// premium.
+const DAILY_REWIND_LIMIT = 3;
 userSchema.methods.canUseRewind = function() {
   const hasPremium = this.isPremium && this.premiumExpiresAt && new Date(this.premiumExpiresAt) > new Date();
   if (!hasPremium) return false;
   this.resetPremiumLimits();
-  return this.premium.rewindsUsed < 5;
+  return this.premium.rewindsUsed < DAILY_REWIND_LIMIT;
+};
+userSchema.statics.DAILY_REWIND_LIMIT = DAILY_REWIND_LIMIT;
+
+// The event to bring back if a rewind is used right now - the most
+// recent 'pass' swipe still on record. Rewinding twice in a row walks
+// backward through pass history one swipe at a time (each rewind
+// removes the one it returns, via addSwipe's own dedup-by-targetId
+// filter never re-adding it), same "next event, then the one before
+// that" order regardless of how many days have passed in between - only
+// the daily *count* of rewinds resets, not which pass is next in line.
+userSchema.methods.getLastPassSwipe = function() {
+  for (let i = this.swipes.length - 1; i >= 0; i--) {
+    if (this.swipes[i].action === 'pass') return this.swipes[i];
+  }
+  return null;
 };
 
 // Get user's recent swipes (for preventing duplicates)
