@@ -11,12 +11,11 @@ import {
   Image,
   ScrollView,
   Dimensions,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import ProfilePreviewCard from '../../components/ProfilePreviewCard';
+import ProfileViewerModal from '../../components/ProfileViewerModal';
 import SelectModal from '../../components/SelectModal';
 
 const { width } = Dimensions.get('window');
@@ -636,25 +635,14 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      <Modal
+      <ProfileViewerModal
         visible={!!viewingProfile}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setViewingProfile(null)}
-      >
-        <View style={styles.profileModalContainer}>
-          <View style={styles.profileModalHeader}>
-            <TouchableOpacity onPress={() => setViewingProfile(null)}>
-              <Ionicons name="close" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
-            <Text style={styles.profileModalHeaderTitle}>{viewingProfile?.name}</Text>
-            <View style={{ width: 26 }} />
-          </View>
-          <ScrollView bounces={false}>
-            <ProfilePreviewCard profile={viewingProfile} />
-          </ScrollView>
-        </View>
-      </Modal>
+        profile={viewingProfile}
+        onClose={() => setViewingProfile(null)}
+        isBlocked={viewingProfile ? isUserMuted(viewingProfile._id) : false}
+        onBlockPress={viewingProfile && viewingProfile._id !== user?.id ? () => handleToggleMute(viewingProfile) : undefined}
+        onReportPress={viewingProfile && viewingProfile._id !== user?.id ? () => handleReport(viewingProfile) : undefined}
+      />
 
       <SelectModal
         visible={!!actionMenuUser}
@@ -982,26 +970,5 @@ const styles = StyleSheet.create({
     color: '#999999',
     textAlign: 'center',
     lineHeight: 20,
-  },
-
-  // Profile view modal - full screen, same as viewing your own Profile
-  profileModalContainer: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  profileModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
-  },
-  profileModalHeaderTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
   },
 });

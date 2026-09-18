@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import ActionSheet from './ActionSheet';
+import ProfileViewerModal from './ProfileViewerModal';
 
 const { width, height } = Dimensions.get('window');
 // Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins,
@@ -225,55 +226,38 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
     const canModerate = organizerId && organizerId !== (user?.id || user?._id);
 
     return (
-      <Modal
+      <ProfileViewerModal
         visible={showOrganizerProfile}
-        animationType="slide"
-        onRequestClose={() => setShowOrganizerProfile(false)}
-      >
-        <View style={styles.profileModalContainer}>
-          <TouchableOpacity style={styles.profileCloseButton} onPress={() => setShowOrganizerProfile(false)}>
-            <Ionicons name="close" size={28} color="white" />
-          </TouchableOpacity>
-
-          <ScrollView style={styles.modalContent}>
-            <ProfilePreviewCard
-              profile={event.organizer}
-              isBlocked={isOrganizerBlocked()}
-              onBlockPress={canModerate ? handleToggleOrganizerBlock : undefined}
-              onReportPress={canModerate ? () => setShowOrganizerReportSheet(true) : undefined}
-            />
-
-            {/* Event organizer stats */}
-            <View style={styles.organizerStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>
-                  {event.organizer?.eventsOrganized?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Events Organized</Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>
-                  {event.organizer?.rating?.toFixed(1) || 'New'}
-                </Text>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
+        profile={event.organizer}
+        onClose={() => setShowOrganizerProfile(false)}
+        isBlocked={isOrganizerBlocked()}
+        onBlockPress={canModerate ? handleToggleOrganizerBlock : undefined}
+        onReportPress={canModerate ? () => setShowOrganizerReportSheet(true) : undefined}
+        scrollFooter={(
+          <View style={styles.organizerStats}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>
+                {event.organizer?.eventsOrganized?.length || 0}
+              </Text>
+              <Text style={styles.statLabel}>Events Organized</Text>
             </View>
-          </ScrollView>
 
-          {/* Nested inside this Modal, not as a sibling of the card - a
-              separate top-level Modal opened while this pageSheet-style one
-              is already showing gets queued behind it on iOS/Android until
-              this one closes, which made Report appear to do nothing until
-              you closed the profile first. */}
-          <ActionSheet
-            visible={showOrganizerReportSheet}
-            title="Why are you reporting this user?"
-            options={organizerReportSheetOptions}
-            onClose={() => setShowOrganizerReportSheet(false)}
-          />
-        </View>
-      </Modal>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>
+                {event.organizer?.rating?.toFixed(1) || 'New'}
+              </Text>
+              <Text style={styles.statLabel}>Rating</Text>
+            </View>
+          </View>
+        )}
+      >
+        <ActionSheet
+          visible={showOrganizerReportSheet}
+          title="Why are you reporting this user?"
+          options={organizerReportSheetOptions}
+          onClose={() => setShowOrganizerReportSheet(false)}
+        />
+      </ProfileViewerModal>
     );
   };
 
@@ -591,34 +575,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-  // Organizer Profile Modal Styles - mirrors ChatScreen's profile modal
-  // (same ProfilePreviewCard, same floating close/options buttons) so the
-  // profile view looks and behaves the same everywhere it's shown.
-  profileModalContainer: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  profileCloseButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    padding: 6,
-  },
-  profileOptionsButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    padding: 6,
-  },
-  modalContent: {
-    flex: 1,
-  },
+  // Organizer profile itself is rendered by the shared ProfileViewerModal
+  // (see renderOrganizerProfile) - only the stats block below the card is
+  // this component's own.
   organizerStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
