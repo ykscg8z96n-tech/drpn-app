@@ -9,6 +9,7 @@ const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
 const { sendPasswordResetEmail } = require('../utils/email');
 const { sendWelcomeMessage } = require('../services/botNotice');
+const { notifyGrowth } = require('../utils/slack');
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -68,6 +69,8 @@ router.post('/register', authLimiter, [
     } catch (welcomeError) {
       console.error('⚠️ Failed to send welcome message:', welcomeError);
     }
+
+    notifyGrowth(`👤 New DRPN user: ${user.name}`);
 
     res.status(201).json({
       success: true,
