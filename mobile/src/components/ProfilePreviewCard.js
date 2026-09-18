@@ -11,10 +11,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { height } = Dimensions.get('window');
 
-export default function ProfilePreviewCard({ profile }) {
+export default function ProfilePreviewCard({ profile, isBlocked, onBlockPress, onReportPress }) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const photos = profile?.photos || [];
   const hasPhotos = photos.length > 0;
+  const showModeration = !!(onBlockPress || onReportPress);
 
   const prevPhoto = () => {
     setCurrentPhotoIndex((i) => (i === 0 ? photos.length - 1 : i - 1));
@@ -64,6 +65,23 @@ export default function ProfilePreviewCard({ profile }) {
             </View>
           </View>
         )}
+
+        {/* Block/Report - stacked bottom-right, above the photo's own
+            next-photo arrow so neither overlaps the carousel controls. */}
+        {showModeration && (
+          <View style={styles.moderationStack}>
+            {onReportPress && (
+              <TouchableOpacity style={styles.moderationButton} onPress={onReportPress}>
+                <Ionicons name="flag-outline" size={20} color="white" />
+              </TouchableOpacity>
+            )}
+            {onBlockPress && (
+              <TouchableOpacity style={styles.moderationButton} onPress={onBlockPress}>
+                <Ionicons name={isBlocked ? 'checkmark-circle-outline' : 'ban-outline'} size={20} color="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       <View style={styles.previewContent}>
@@ -93,11 +111,14 @@ export default function ProfilePreviewCard({ profile }) {
 const styles = StyleSheet.create({
   previewCard: {
     backgroundColor: '#000000',
+    marginHorizontal: 16,
   },
   previewImageContainer: {
     position: 'relative',
     height: height * 0.6,
     backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   previewImage: {
     width: '100%',
@@ -125,8 +146,7 @@ const styles = StyleSheet.create({
   carouselNavLeft: {
     position: 'absolute',
     left: 16,
-    top: '50%',
-    marginTop: -20,
+    bottom: 16,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -137,8 +157,7 @@ const styles = StyleSheet.create({
   carouselNavRight: {
     position: 'absolute',
     right: 16,
-    top: '50%',
-    marginTop: -20,
+    bottom: 16,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -148,12 +167,26 @@ const styles = StyleSheet.create({
   },
   carouselIndicators: {
     position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
+    bottom: 26,
+    left: 64,
+    right: 64,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
+  },
+  moderationStack: {
+    position: 'absolute',
+    bottom: 64,
+    right: 16,
+    gap: 8,
+  },
+  moderationButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   carouselIndicator: {
     width: 8,

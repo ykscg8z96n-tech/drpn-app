@@ -42,7 +42,6 @@ export default function ChatScreen({ route, navigation }) {
   const [startingChat, setStartingChat] = useState(false);
   const [viewingInviteEvent, setViewingInviteEvent] = useState(null);
   const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'joined' | 'passed' | 'joining'
-  const [showProfileOptionsSheet, setShowProfileOptionsSheet] = useState(false);
   const [showReportSheet, setShowReportSheet] = useState(false);
 
   const flatListRef = useRef(null);
@@ -147,15 +146,6 @@ export default function ChatScreen({ route, navigation }) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to update block status');
     }
   };
-
-  const profileOptionsSheetOptions = viewingProfile ? [
-    {
-      text: isUserBlocked(viewingProfile._id) ? 'Unblock User' : 'Block User',
-      onPress: handleToggleProfileBlock,
-      destructive: !isUserBlocked(viewingProfile._id)
-    },
-    { text: 'Report User', onPress: () => setShowReportSheet(true), destructive: true },
-  ] : [];
 
   const reportSheetOptions = reportReasons.map(r => ({ text: r.label, onPress: () => submitReport(r.value) }));
 
@@ -794,14 +784,13 @@ export default function ChatScreen({ route, navigation }) {
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
           {viewingProfile && (
-            <TouchableOpacity
-              style={styles.profileOptionsButton}
-              onPress={() => setShowProfileOptionsSheet(true)}
-            >
-              <Ionicons name="ellipsis-horizontal" size={22} color="white" />
-            </TouchableOpacity>
+            <ProfilePreviewCard
+              profile={viewingProfile}
+              isBlocked={isUserBlocked(viewingProfile._id)}
+              onBlockPress={handleToggleProfileBlock}
+              onReportPress={() => setShowReportSheet(true)}
+            />
           )}
-          {viewingProfile && <ProfilePreviewCard profile={viewingProfile} />}
           {viewingProfile && (
             <TouchableOpacity
               style={styles.messagePrivatelyButton}
@@ -821,12 +810,8 @@ export default function ChatScreen({ route, navigation }) {
         </View>
 
         <ActionSheet
-          visible={showProfileOptionsSheet}
-          options={profileOptionsSheetOptions}
-          onClose={() => setShowProfileOptionsSheet(false)}
-        />
-        <ActionSheet
           visible={showReportSheet}
+          title="Why are you reporting this user?"
           options={reportSheetOptions}
           onClose={() => setShowReportSheet(false)}
         />

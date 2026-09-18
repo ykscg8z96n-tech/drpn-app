@@ -340,6 +340,16 @@ router.post('/:id/block', protect, async (req, res) => {
       await reciprocalConnection.blockUser();
     }
 
+    // Keep the account-level block list (see backend/src/models/User.js)
+    // in sync too - it's the one checked for hiding messages in shared
+    // event/group chats and stopping a fresh private invite, so blocking
+    // from here needs to land there as well, not just on this connection.
+    const otherUserId = connection.participant.toString() === req.user.id
+      ? connection.otherUser
+      : connection.participant;
+    await User.findByIdAndUpdate(req.user.id, { $addToSet: { blockedUsers: otherUserId } });
+    await User.findByIdAndUpdate(otherUserId, { $addToSet: { blockedUsers: req.user.id } });
+
     console.log(`🚫 Private connection blocked by ${req.user.id}`);
 
     res.json({
@@ -385,6 +395,14 @@ router.delete('/:id/block', protect, async (req, res) => {
     if (reciprocalConnection) {
       await reciprocalConnection.unblockUser();
     }
+
+    // Mirror on the account-level block list too - see the matching note
+    // in the block route above.
+    const unblockedUserId = connection.participant.toString() === req.user.id
+      ? connection.otherUser
+      : connection.participant;
+    await User.findByIdAndUpdate(req.user.id, { $pull: { blockedUsers: unblockedUserId } });
+    await User.findByIdAndUpdate(unblockedUserId, { $pull: { blockedUsers: req.user.id } });
 
     console.log(`✅ Private connection unblocked by ${req.user.id}`);
 

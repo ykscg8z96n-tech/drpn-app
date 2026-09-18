@@ -259,22 +259,31 @@ router.get('/nearby', protect, async (req, res) => {
     
     // Get user's swipes efficiently
     let swipedEventIds = [];
+    let blockedUserIds = [];
     try {
-      const user = await User.findById(req.user.id).select('swipes').lean();
+      const user = await User.findById(req.user.id).select('swipes blockedUsers').lean();
       swipedEventIds = user?.swipes?.map(swipe => swipe.targetId) || [];
+      blockedUserIds = user?.blockedUsers || [];
     } catch (userError) {
       console.warn('⚠️ Failed to get user swipes:', userError.message);
     }
-    
+
     // Build query - private events/groups ("only people with invite codes
     // can join") are deliberately excluded from public discovery; they're
-    // only reachable via their invite code.
+    // only reachable via their invite code. Blocking someone (from any
+    // surface - a chat's profile viewer, the roster list) also hides
+    // anything they organize/co-own from here, same idea as not seeing
+    // their messages once blocked.
     const query = {
       isActive: true,
       isArchived: { $ne: true },
       isPublic: true,
       organizer: { $ne: req.user.id }
     };
+
+    if (blockedUserIds.length > 0) {
+      query.admins = { $nin: blockedUserIds };
+    }
     
     if (swipedEventIds.length > 0) {
       query._id = { $nin: swipedEventIds };
