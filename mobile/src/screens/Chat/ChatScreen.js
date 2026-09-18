@@ -20,9 +20,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
-import ProfilePreviewCard from '../../components/ProfilePreviewCard';
 import EventCard from '../../components/EventCard';
 import ActionSheet from '../../components/ActionSheet';
+import ProfileViewerModal from '../../components/ProfileViewerModal';
 
 const { width } = Dimensions.get('window');
 
@@ -774,48 +774,37 @@ export default function ChatScreen({ route, navigation }) {
 
       {renderInputArea()}
 
-      <Modal
+      <ProfileViewerModal
         visible={!!viewingProfile}
-        animationType="slide"
-        onRequestClose={() => setViewingProfile(null)}
-      >
-        <View style={styles.profileModalContainer}>
-          <TouchableOpacity style={styles.profileCloseButton} onPress={() => setViewingProfile(null)}>
-            <Ionicons name="close" size={28} color="white" />
+        profile={viewingProfile}
+        onClose={() => setViewingProfile(null)}
+        isBlocked={viewingProfile ? isUserBlocked(viewingProfile._id) : false}
+        onBlockPress={handleToggleProfileBlock}
+        onReportPress={() => setShowReportSheet(true)}
+        footer={viewingProfile && (
+          <TouchableOpacity
+            style={styles.messagePrivatelyButton}
+            onPress={handleMessagePrivately}
+            disabled={startingChat}
+          >
+            {startingChat ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <>
+                <Ionicons name="chatbubble" size={18} color="white" />
+                <Text style={styles.messagePrivatelyText}>Message Privately</Text>
+              </>
+            )}
           </TouchableOpacity>
-          {viewingProfile && (
-            <ProfilePreviewCard
-              profile={viewingProfile}
-              isBlocked={isUserBlocked(viewingProfile._id)}
-              onBlockPress={handleToggleProfileBlock}
-              onReportPress={() => setShowReportSheet(true)}
-            />
-          )}
-          {viewingProfile && (
-            <TouchableOpacity
-              style={styles.messagePrivatelyButton}
-              onPress={handleMessagePrivately}
-              disabled={startingChat}
-            >
-              {startingChat ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <>
-                  <Ionicons name="chatbubble" size={18} color="white" />
-                  <Text style={styles.messagePrivatelyText}>Message Privately</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
-
+        )}
+      >
         <ActionSheet
           visible={showReportSheet}
           title="Why are you reporting this user?"
           options={reportSheetOptions}
           onClose={() => setShowReportSheet(false)}
         />
-      </Modal>
+      </ProfileViewerModal>
 
       <Modal
         visible={!!viewingInviteEvent}
