@@ -472,7 +472,24 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     return !!user?.blockedUsers?.some(id => (id?._id || id)?.toString?.() === userId.toString());
   };
 
-  const handleToggleMute = async (userData) => {
+  const handleToggleMute = (userData) => {
+    if (isUserMuted(userData._id)) {
+      performToggleMute(userData);
+      return;
+    }
+    // Only confirm before muting, not unmuting - easy to tap the wrong
+    // row action by mistake.
+    Alert.alert(
+      `Mute ${userData.name}?`,
+      "You'll stop seeing their messages here and can't start a fresh private chat with them.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Mute', style: 'destructive', onPress: () => performToggleMute(userData) },
+      ]
+    );
+  };
+
+  const performToggleMute = async (userData) => {
     const muted = isUserMuted(userData._id);
     try {
       const response = muted

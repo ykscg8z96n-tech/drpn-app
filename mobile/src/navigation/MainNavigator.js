@@ -12,6 +12,7 @@ import MatchesScreen from '../screens/Main/MatchesScreen';
 import CreateEventScreen from '../screens/Main/CreateEventScreen';
 import ProfileScreen from '../screens/Main/ProfileScreen';
 import HowToUseScreen from '../screens/Main/HowToUseScreen';
+import BlockedUsersScreen from '../screens/Main/BlockedUsersScreen';
 
 // Stack Screens
 import ChatScreen from '../screens/Chat/ChatScreen';
@@ -229,6 +230,11 @@ function ProfileStack() {
         name="HowToUse"
         component={HowToUseScreen}
         options={{ title: 'How to Use DRPN' }}
+      />
+      <Stack.Screen
+        name="BlockedUsers"
+        component={BlockedUsersScreen}
+        options={{ title: 'Blocked Users' }}
       />
     </Stack.Navigator>
   );

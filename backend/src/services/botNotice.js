@@ -9,6 +9,7 @@
 const Message = require('../models/Message');
 const ChatCounter = require('../models/ChatCounter');
 const PrivateConnection = require('../models/PrivateConnection');
+const User = require('../models/User');
 const { getBotUserId } = require('./botUser');
 const { sendPushToUser } = require('./webPush');
 const { isUserOnline } = require('../socket/socketHandler');
@@ -126,6 +127,55 @@ async function sendWelcomeMessage(toUserId, req) {
   await ensureWelcomeSent(botId, toUserId, req);
 }
 
+// Posted whenever one user blocks/unblocks/mutes/unmutes another (see
+// routes/users.js's /block/:userId and routes/private-connections.js's
+// /:id/block - block and mute are the same underlying action under
+// different button labels, so both funnel here). Two things happen:
+//  1. If the two users already have a private chat, a note goes there
+//     too (visible to both, same as the "conversation is blocked"
+//     banner already shown) - only into a chat that already exists,
+//     never one created just for this.
+//  2. The actor always also gets the same note in their own DRPN bot
+//     DM, as a standing record of moderation actions they've taken.
+// Non-fatal by design (callers wrap this in try/catch) - the block/mute
+// itself already succeeded by the time this runs.
+async function postModerationNotice(actorId, targetId, verb, req) {
+  const [actor, target] = await Promise.all([
+    User.findById(actorId).select('name'),
+    User.findById(targetId).select('name'),
+  ]);
+  const text = `${actor?.name || 'A user'} ${verb} ${target?.name || 'a user'}.`;
+
+  const connection = await PrivateConnection.findOne({
+    $or: [
+      { participant: actorId, otherUser: targetId },
+      { participant: targetId, otherUser: actorId }
+    ]
+  });
+  if (connection) {
+    const botId = await getBotUserId();
+    const uids = [actorId.toString(), targetId.toString()].sort();
+    const chatId = `private-${uids[0]}-${uids[1]}`;
+    const seq = await ChatCounter.nextSeq(chatId);
+    const message = await Message.create({
+      chatType: 'private',
+      chatId,
+      privateConnection: connection._id,
+      sender: botId,
+      text,
+      messageType: 'text',
+      seq
+    });
+    await message.populate('sender', 'name photos');
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`${message.chatType}:${message.chatId}`).emit('message:new', message);
+    }
+  }
+
+  await sendBotNotice(actorId, text, req);
+}
+
 // A plain-text bot announcement into an event/group's own chat - "X
 // joined", "X is now an owner", "X stepped down", "X was removed".
 // Non-fatal by design (callers wrap this in try/catch): the roster
@@ -147,5 +197,6 @@ module.exports = {
   postPrivateNotification,
   sendBotNotice,
   sendWelcomeMessage,
-  postSystemAnnouncement
+  postSystemAnnouncement,
+  postModerationNotice
 };

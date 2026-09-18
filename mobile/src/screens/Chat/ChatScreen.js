@@ -122,7 +122,26 @@ export default function ChatScreen({ route, navigation }) {
   // blocked user's messages in this shared chat (see the filter on
   // `messages` passed to the FlatList below) and stops them from
   // starting a fresh private chat with you.
-  const handleToggleProfileBlock = async () => {
+  const handleToggleProfileBlock = () => {
+    if (!viewingProfile) return;
+    if (isUserBlocked(viewingProfile._id)) {
+      performToggleProfileBlock();
+      return;
+    }
+    // Only confirm before blocking, not unblocking - accidentally
+    // blocking someone (e.g. tapping this instead of a nearby carousel
+    // arrow) is easy to do and hard to notice you did.
+    Alert.alert(
+      `Block ${viewingProfile.name}?`,
+      "Their messages here will be hidden and they won't be able to start a private chat with you.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: performToggleProfileBlock },
+      ]
+    );
+  };
+
+  const performToggleProfileBlock = async () => {
     if (!viewingProfile) return;
     const blocked = isUserBlocked(viewingProfile._id);
     try {
