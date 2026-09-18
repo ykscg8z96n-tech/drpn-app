@@ -822,6 +822,34 @@ router.delete('/me', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/:id/common-events
+// @desc    Events/groups both the current user and :id are on the roster
+//          of (an admin, or an accepted applicant) - powers the "In
+//          Common" section on a profile viewer. Registered before the
+//          bare GET /:id below so it isn't shadowed by it.
+// @access  Private
+router.get('/:id/common-events', protect, async (req, res) => {
+  try {
+    const otherId = req.params.id;
+    const onRoster = (userId) => ({
+      $or: [
+        { admins: userId },
+        { applicants: { $elemMatch: { userId, status: 'accepted' } } }
+      ]
+    });
+
+    const events = await Event.find({
+      isArchived: { $ne: true },
+      $and: [onRoster(req.user.id), onRoster(otherId)]
+    }).select('name type category photos currentAttendees groupSize capacity eventDate');
+
+    res.json({ success: true, data: events });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/:id
 // @desc    Get another user's public profile (e.g. tapping a name/avatar
 //          in a chat). Registered last so it doesn't shadow the specific
