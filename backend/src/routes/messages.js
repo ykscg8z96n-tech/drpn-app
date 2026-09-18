@@ -378,14 +378,17 @@ router.get('/private/:connectionId', protect, async (req, res) => {
     
     const { limit = 50, before } = req.query;
 
-    // Find the connection the user has access to
+    // Find the connection the user has access to - 'blocked' is allowed
+    // here too so a blocked chat's history stays readable (and the
+    // blocked note below can render); sending is separately blocked
+    // further down and in the socket handler regardless of this check.
     const connection = await PrivateConnection.findOne({
       _id: req.params.connectionId,
       $or: [
         { participant: req.user.id },
         { otherUser: req.user.id }
       ],
-      status: 'accepted',
+      status: { $in: ['accepted', 'blocked'] },
       isArchived: false
     }).populate('otherUser participant', 'name photos');
 
