@@ -149,16 +149,16 @@ const UserItem = ({
                         <Ionicons name="chatbubble-outline" size={16} color="#007AFF" />
                         <Text style={styles.chatButtonText}>Chat</Text>
                       </TouchableOpacity>
-                      {/* Owners can't be kicked or re-promoted - they have
-                          to step down themselves. */}
-                      {canManage && !isTargetOwner && (
-                        <TouchableOpacity
-                          style={styles.moreButton}
-                          onPress={() => onOpenActions(user)}
-                        >
-                          <Ionicons name="ellipsis-horizontal" size={18} color="#999999" />
-                        </TouchableOpacity>
-                      )}
+                      {/* Mute/Report are available on anyone else regardless
+                          of role; owners just can't also be kicked or
+                          re-promoted from here - they have to step down
+                          themselves (see the options list itself). */}
+                      <TouchableOpacity
+                        style={styles.moreButton}
+                        onPress={() => onOpenActions(user)}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={18} color="#999999" />
+                      </TouchableOpacity>
                     </>
                   )}
                 </View>
@@ -190,7 +190,7 @@ const UserItem = ({
 
 export default function PendingApplicationsScreen({ route, navigation }) {
   const { event } = route.params;
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [pendingUsers, setPendingUsers] = useState([]);
   const [acceptedUsers, setAcceptedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -463,6 +463,64 @@ export default function PendingApplicationsScreen({ route, navigation }) {
     );
   };
 
+  // Same account-level block used from a chat's profile viewer - "Mute"
+  // is just the friendlier label for it here, since you still share a
+  // roster with this person (they don't disappear from the list), you
+  // just stop seeing their messages and can't start a fresh private chat
+  // with them either way.
+  const isUserMuted = (userId) => {
+    if (!userId) return false;
+    return !!user?.blockedUsers?.some(id => (id?._id || id)?.toString?.() === userId.toString());
+  };
+
+  const handleToggleMute = async (userData) => {
+    const muted = isUserMuted(userData._id);
+    try {
+      const response = muted
+        ? await api.delete(`/users/block/${userData._id}`)
+        : await api.post(`/users/block/${userData._id}`);
+      if (response.data.success) {
+        updateUser(response.data.data);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update mute status');
+    }
+  };
+
+  const reportReasons = [
+    { label: 'Harassment', value: 'harassment' },
+    { label: 'Spam', value: 'spam' },
+    { label: 'Inappropriate content', value: 'inappropriate_content' },
+    { label: 'Safety concern', value: 'safety_concern' },
+    { label: 'Other', value: 'other' },
+  ];
+
+  const handleReport = (userData) => {
+    Alert.alert(
+      `Report ${userData.name}`,
+      'What\'s the issue?',
+      [
+        ...reportReasons.map(r => ({
+          text: r.label,
+          onPress: async () => {
+            try {
+              await api.post('/reports', {
+                reportedUserId: userData._id,
+                reason: r.value,
+                context: event.type === 'group' ? 'group_chat' : 'event_chat',
+                contextId: event._id,
+              });
+              Alert.alert('Report Submitted', 'Thanks for letting us know. Our team will review this.');
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to submit report');
+            }
+          }
+        })),
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleKick = (userData) => {
     Alert.alert(
       'Remove from Roster',
@@ -598,13 +656,25 @@ export default function PendingApplicationsScreen({ route, navigation }) {
         visible={!!actionMenuUser}
         title={actionMenuUser?.name}
         options={[
-          { label: 'Make Owner', value: 'promote' },
-          { label: 'Remove from Roster', value: 'kick' },
+          // Owners can't be kicked or re-promoted from here - they have
+          // to step down themselves - so management actions only apply
+          // to a non-owner target, and only when the viewer can manage.
+          ...(canManage && actionMenuUser && !isOwner(actionMenuUser._id) ? [
+            { label: 'Make Owner', value: 'promote' },
+            { label: 'Remove from Roster', value: 'kick' },
+          ] : []),
+          {
+            label: isUserMuted(actionMenuUser?._id) ? 'Unmute' : 'Mute',
+            value: 'mute'
+          },
+          { label: 'Report', value: 'report' },
         ]}
         onSelect={(action) => {
           const targetUser = actionMenuUser;
           if (action === 'promote') handleMakeOwner(targetUser);
           else if (action === 'kick') handleKick(targetUser);
+          else if (action === 'mute') handleToggleMute(targetUser);
+          else if (action === 'report') handleReport(targetUser);
         }}
         onClose={() => setActionMenuUser(null)}
       />

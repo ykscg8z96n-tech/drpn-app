@@ -980,22 +980,6 @@ export default function ProfileScreen({ navigation }) {
   const photos = profile?.photos || [];
   const hasPhotos = photos.length > 0;
 
-  // Calculate user's age if birthdate exists
-  const calculateAge = () => {
-    const birthDate = profile?.birthDate || profile?.birthdate;
-    if (!birthDate) return null;
-    const birth = parseDateOnly(birthDate);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const userAge = calculateAge();
-
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
       {/* Profile Card - Same style as EventCard organizer profile modal */}
@@ -1067,12 +1051,6 @@ export default function ProfileScreen({ navigation }) {
             )}
           </View>
 
-          {userAge && (
-            <Text style={styles.previewAge}>
-              {userAge} years old
-            </Text>
-          )}
-          
           {/* About Section */}
           {profile?.bio && (
             <View style={styles.previewAboutSection}>

@@ -156,6 +156,16 @@ const userSchema = new mongoose.Schema({
     min: 1,
     max: 100
   },
+
+  // Account-level block list - separate from PrivateConnection's own
+  // per-connection block (which only silences messaging inside that one
+  // thread). This is the general "I don't want to deal with this person
+  // anywhere" list, checked before a new private chat can be started and
+  // used to hide their messages in shared event/group chats.
+  blockedUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   settings: {
     notifications: {
       push: { type: Boolean, default: true },

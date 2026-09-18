@@ -26,7 +26,7 @@ const loginSchema = Yup.object().shape({
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, wakingBackend } = useAuth();
   const navigation = useNavigation();
 
   const handleLogin = async (values) => {
@@ -126,6 +126,12 @@ export default function LoginScreen() {
                 <Text style={styles.buttonText}>Sign In</Text>
               )}
             </TouchableOpacity>
+
+            {wakingBackend && (
+              <Text style={styles.wakingText}>
+                Waking up the server - this can take up to a minute on the first try...
+              </Text>
+            )}
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -236,6 +242,12 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  wakingText: {
+    color: '#999999',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 12,
   },
   buttonText: {
     color: '#FFFFFF', // White - Button text
