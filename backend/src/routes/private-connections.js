@@ -66,6 +66,20 @@ router.post('/invite', [protect, requireVerified,
       });
     }
 
+    // Account-level block (either direction) - separate from
+    // PrivateConnection's own block, which only silences an existing
+    // thread. This stops a blocked/blocking party from starting a fresh
+    // one to route around that.
+    const [sender, recipientUser] = await Promise.all([
+      User.findById(req.user.id).select('blockedUsers'),
+      User.findById(toUserId).select('blockedUsers')
+    ]);
+    const senderBlocked = sender?.blockedUsers?.some(id => id.toString() === toUserId);
+    const recipientBlocked = recipientUser?.blockedUsers?.some(id => id.toString() === req.user.id);
+    if (senderBlocked || recipientBlocked) {
+      return res.status(403).json({ success: false, message: 'Unable to start a chat with this user' });
+    }
+
     // Already chatting with this person - hand back the existing
     // connection instead of erroring, so tapping "Chat" again just opens
     // the same thread rather than dead-ending.
@@ -490,6 +504,18 @@ router.post('/quick-invite', [protect, requireVerified,
         success: false,
         message: 'Target user is not a participant in this event'
       });
+    }
+
+    // Account-level block (either direction) - see the same check in
+    // POST /invite above.
+    const [quickSender, quickRecipient] = await Promise.all([
+      User.findById(req.user.id).select('blockedUsers'),
+      User.findById(toUserId).select('blockedUsers')
+    ]);
+    const quickSenderBlocked = quickSender?.blockedUsers?.some(id => id.toString() === toUserId);
+    const quickRecipientBlocked = quickRecipient?.blockedUsers?.some(id => id.toString() === req.user.id);
+    if (quickSenderBlocked || quickRecipientBlocked) {
+      return res.status(403).json({ success: false, message: 'Unable to start a chat with this user' });
     }
 
     // Check if connection already exists (either direction)

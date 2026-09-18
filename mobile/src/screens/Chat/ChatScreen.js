@@ -22,12 +22,13 @@ import { useSocket } from '../../contexts/SocketContext';
 import api from '../../services/api';
 import ProfilePreviewCard from '../../components/ProfilePreviewCard';
 import EventCard from '../../components/EventCard';
+import ActionSheet from '../../components/ActionSheet';
 
 const { width } = Dimensions.get('window');
 
 export default function ChatScreen({ route, navigation }) {
   const { chatId, eventId, eventName, eventType } = route.params || {};
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { socket } = useSocket();
 
   const [messages, setMessages] = useState([]);
@@ -41,6 +42,8 @@ export default function ChatScreen({ route, navigation }) {
   const [startingChat, setStartingChat] = useState(false);
   const [viewingInviteEvent, setViewingInviteEvent] = useState(null);
   const [inviteStatuses, setInviteStatuses] = useState({}); // messageId -> 'joined' | 'passed' | 'joining'
+  const [showProfileOptionsSheet, setShowProfileOptionsSheet] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
 
   const flatListRef = useRef(null);
   const finalChatId = chatId || eventId;
@@ -87,6 +90,70 @@ export default function ChatScreen({ route, navigation }) {
       setStartingChat(false);
     }
   };
+
+  const isUserBlocked = (userId) => {
+    if (!userId) return false;
+    return !!user?.blockedUsers?.some(id => (id?._id || id)?.toString?.() === userId.toString());
+  };
+
+  const reportReasons = [
+    { label: 'Harassment', value: 'harassment' },
+    { label: 'Spam', value: 'spam' },
+    { label: 'Inappropriate content', value: 'inappropriate_content' },
+    { label: 'Safety concern', value: 'safety_concern' },
+    { label: 'Other', value: 'other' },
+  ];
+
+  const submitReport = async (reason) => {
+    try {
+      await api.post('/reports', {
+        reportedUserId: viewingProfile?._id,
+        reason,
+        context: eventType === 'group' ? 'group_chat' : 'event_chat',
+        contextId: finalChatId,
+      });
+      Alert.alert('Report Submitted', 'Thanks for letting us know. Our team will review this.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to submit report');
+    }
+  };
+
+  // Account-level block (see backend/src/models/User.js) - separate from
+  // PrivateConnection's own per-connection block, this one also hides the
+  // blocked user's messages in this shared chat (see the filter on
+  // `messages` passed to the FlatList below) and stops them from
+  // starting a fresh private chat with you.
+  const handleToggleProfileBlock = async () => {
+    if (!viewingProfile) return;
+    const blocked = isUserBlocked(viewingProfile._id);
+    try {
+      const response = blocked
+        ? await api.delete(`/users/block/${viewingProfile._id}`)
+        : await api.post(`/users/block/${viewingProfile._id}`);
+      if (response.data.success) {
+        updateUser(response.data.data);
+        Alert.alert(
+          blocked ? 'Unblocked' : 'Blocked',
+          blocked
+            ? `You've unblocked ${viewingProfile.name}.`
+            : `You've blocked ${viewingProfile.name}. Their messages here are hidden and they can't start a private chat with you.`
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update block status');
+    }
+  };
+
+  const profileOptionsSheetOptions = viewingProfile ? [
+    {
+      text: isUserBlocked(viewingProfile._id) ? 'Unblock User' : 'Block User',
+      onPress: handleToggleProfileBlock,
+      destructive: !isUserBlocked(viewingProfile._id)
+    },
+    { text: 'Report User', onPress: () => setShowReportSheet(true), destructive: true },
+  ] : [];
+
+  const reportSheetOptions = reportReasons.map(r => ({ text: r.label, onPress: () => submitReport(r.value) }));
 
   const handleViewInviteEvent = async (eventId) => {
     try {
@@ -545,7 +612,11 @@ export default function ChatScreen({ route, navigation }) {
     const isOrganizerMessage = isOwner(item.sender?._id);
     const senderName = item.sender?.name || 'Unknown User';
 
-    const previousMessage = index > 0 ? messages[index - 1] : null;
+    // visibleMessages, not messages - index here is the position within
+    // the filtered (blocked-sender-hidden) list the FlatList actually
+    // renders, so looking up the previous item has to come from the same
+    // array or grouping/timestamp logic drifts once anything is filtered.
+    const previousMessage = index > 0 ? visibleMessages[index - 1] : null;
     const showTimestamp = !previousMessage ||
       new Date(item.createdAt) - new Date(previousMessage.createdAt) > 5 * 60 * 1000;
     // Group/event chats have multiple senders - show the name above a
@@ -645,6 +716,14 @@ export default function ChatScreen({ route, navigation }) {
     </View>
   );
 
+  // Hides a blocked sender's messages from this shared chat (system
+  // messages and your own always stay visible).
+  const visibleMessages = messages.filter((m) => {
+    if (m.messageType === 'system') return true;
+    const senderId = m.sender?._id || m.sender;
+    return senderId === user?.id || !isUserBlocked(senderId);
+  });
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -675,7 +754,7 @@ export default function ChatScreen({ route, navigation }) {
     >
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={visibleMessages}
         renderItem={renderMessage}
         keyExtractor={(item) => item._id}
         style={styles.messagesList}
@@ -705,6 +784,14 @@ export default function ChatScreen({ route, navigation }) {
           <TouchableOpacity style={styles.profileCloseButton} onPress={() => setViewingProfile(null)}>
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
+          {viewingProfile && (
+            <TouchableOpacity
+              style={styles.profileOptionsButton}
+              onPress={() => setShowProfileOptionsSheet(true)}
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color="white" />
+            </TouchableOpacity>
+          )}
           {viewingProfile && <ProfilePreviewCard profile={viewingProfile} />}
           {viewingProfile && (
             <TouchableOpacity
@@ -723,6 +810,17 @@ export default function ChatScreen({ route, navigation }) {
             </TouchableOpacity>
           )}
         </View>
+
+        <ActionSheet
+          visible={showProfileOptionsSheet}
+          options={profileOptionsSheetOptions}
+          onClose={() => setShowProfileOptionsSheet(false)}
+        />
+        <ActionSheet
+          visible={showReportSheet}
+          options={reportSheetOptions}
+          onClose={() => setShowReportSheet(false)}
+        />
       </Modal>
 
       <Modal
@@ -1122,6 +1220,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 6,
+  },
+  profileOptionsButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
     zIndex: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 20,

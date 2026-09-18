@@ -134,6 +134,54 @@ router.post('/verify', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/users/block/:userId
+// @desc    Account-level block - separate from PrivateConnection's own
+//          per-connection block. Stops the blocked user's messages from
+//          showing in shared event/group chats (enforced client-side
+//          against this list) and stops them from starting a new
+//          private chat with you (enforced in POST /private-connections/
+//          invite and /quick-invite).
+// @access  Private
+router.post('/block/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (userId === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Cannot block yourself' });
+    }
+    const target = await User.findById(userId).select('_id');
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $addToSet: { blockedUsers: userId } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('❌ Error blocking user:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/users/block/:userId
+// @desc    Remove an account-level block.
+// @access  Private
+router.delete('/block/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { blockedUsers: userId } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('❌ Error unblocking user:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 const PREMIUM_TRIAL_DAYS = 7;
 
 // @route   POST /api/users/premium-trial

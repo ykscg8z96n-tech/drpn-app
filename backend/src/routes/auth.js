@@ -84,7 +84,8 @@ router.post('/register', authLimiter, [
         premiumTrialUsedAt: user.premiumTrialUsedAt,
         searchRadius: user.searchRadius,
         reputation: user.reputation,
-        location: user.location
+        location: user.location,
+        blockedUsers: user.blockedUsers
       }
     });
   } catch (error) {
@@ -152,7 +153,8 @@ router.post('/login', authLimiter, [
         settings: user.settings,
         eventsJoined: user.eventsJoined,
         eventsOrganized: user.eventsOrganized,
-        lastActive: user.lastActive
+        lastActive: user.lastActive,
+        blockedUsers: user.blockedUsers
       }
     });
   } catch (error) {
