@@ -95,7 +95,6 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [showOrganizerOptionsSheet, setShowOrganizerOptionsSheet] = useState(false);
   const [showOrganizerReportSheet, setShowOrganizerReportSheet] = useState(false);
   const { user, updateUser } = useAuth();
 
@@ -160,15 +159,6 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
       Alert.alert('Error', error.response?.data?.message || 'Failed to submit report');
     }
   };
-
-  const organizerOptionsSheetOptions = [
-    {
-      text: isOrganizerBlocked() ? 'Unblock User' : 'Block User',
-      onPress: handleToggleOrganizerBlock,
-      destructive: !isOrganizerBlocked()
-    },
-    { text: 'Report User', onPress: () => setShowOrganizerReportSheet(true), destructive: true },
-  ];
 
   const organizerReportSheetOptions = reportReasons.map(r => ({ text: r.label, onPress: () => submitOrganizerReport(r.value) }));
 
@@ -244,17 +234,14 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
           <TouchableOpacity style={styles.profileCloseButton} onPress={() => setShowOrganizerProfile(false)}>
             <Ionicons name="close" size={28} color="white" />
           </TouchableOpacity>
-          {canModerate && (
-            <TouchableOpacity
-              style={styles.profileOptionsButton}
-              onPress={() => setShowOrganizerOptionsSheet(true)}
-            >
-              <Ionicons name="ellipsis-horizontal" size={22} color="white" />
-            </TouchableOpacity>
-          )}
 
           <ScrollView style={styles.modalContent}>
-            <ProfilePreviewCard profile={event.organizer} />
+            <ProfilePreviewCard
+              profile={event.organizer}
+              isBlocked={isOrganizerBlocked()}
+              onBlockPress={canModerate ? handleToggleOrganizerBlock : undefined}
+              onReportPress={canModerate ? () => setShowOrganizerReportSheet(true) : undefined}
+            />
 
             {/* Event organizer stats */}
             <View style={styles.organizerStats}>
@@ -277,13 +264,8 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
           {/* Nested inside this Modal, not as a sibling of the card - a
               separate top-level Modal opened while this pageSheet-style one
               is already showing gets queued behind it on iOS/Android until
-              this one closes, which made Block/Report appear to do nothing
-              until you closed the profile first. */}
-          <ActionSheet
-            visible={showOrganizerOptionsSheet}
-            options={organizerOptionsSheetOptions}
-            onClose={() => setShowOrganizerOptionsSheet(false)}
-          />
+              this one closes, which made Report appear to do nothing until
+              you closed the profile first. */}
           <ActionSheet
             visible={showOrganizerReportSheet}
             title="Why are you reporting this user?"
