@@ -248,6 +248,16 @@ export default function SwipeScreen({ navigation }) {
     }
   };
 
+  // Blocking happens from a card already sitting in `events` (fetched
+  // before the block) - GET /events/nearby only excludes blocked
+  // organizers' events on the *next* fetch, so without this the card
+  // would stay in the deck until it happened to reload.
+  const handleOrganizerBlocked = (organizerId) => {
+    setEvents(prev => prev.filter(
+      e => (e.organizer?._id || e.organizer?.id)?.toString() !== organizerId?.toString()
+    ));
+  };
+
   const handleFilterSelect = (categoryId) => {
     selectFilter(categoryId);
     setCardIndex(0); // Reset to first card
@@ -679,7 +689,12 @@ export default function SwipeScreen({ navigation }) {
             ref={swiperRef}
             cards={events}
             renderCard={(event) => (
-              <EventCard event={event} onExpandChange={setCardExpanded} cardHeight={computedCardHeight} />
+              <EventCard
+                event={event}
+                onExpandChange={setCardExpanded}
+                cardHeight={computedCardHeight}
+                onOrganizerBlocked={handleOrganizerBlocked}
+              />
             )}
             onSwiped={onSwiped}
             onSwipedAll={onSwipedAll}

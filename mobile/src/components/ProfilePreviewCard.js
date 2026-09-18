@@ -93,11 +93,14 @@ export default function ProfilePreviewCard({ profile }) {
 const styles = StyleSheet.create({
   previewCard: {
     backgroundColor: '#000000',
+    marginHorizontal: 16,
   },
   previewImageContainer: {
     position: 'relative',
     height: height * 0.6,
     backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   previewImage: {
     width: '100%',

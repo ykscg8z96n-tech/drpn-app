@@ -91,10 +91,9 @@ const TypeBadge = ({ type }) => (
   </View>
 );
 
-export default function EventCard({ event, distance, onImagePress, onExpandChange, cardHeight }) {
+export default function EventCard({ event, distance, onImagePress, onExpandChange, cardHeight, onOrganizerBlocked }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
-  const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [showOrganizerOptionsSheet, setShowOrganizerOptionsSheet] = useState(false);
   const [showOrganizerReportSheet, setShowOrganizerReportSheet] = useState(false);
@@ -126,7 +125,14 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
             ? `You've unblocked ${event.organizer?.name || 'this user'}.`
             : `You've blocked ${event.organizer?.name || 'this user'}. Their events and groups will no longer show up in your swipe deck.`
         );
-        if (!blocked) setShowOrganizerProfile(false);
+        if (!blocked) {
+          setShowOrganizerProfile(false);
+          // The deck was already fetched with this organizer's cards in it
+          // (the backend's GET /events/nearby exclusion only applies to the
+          // *next* fetch) - drop them from the current deck now too, so the
+          // card doesn't just sit there until the deck happens to reload.
+          onOrganizerBlocked?.(organizerId);
+        }
       }
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to update block status');
@@ -170,25 +176,6 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
     const next = !expanded;
     setExpanded(next);
     onExpandChange?.(next);
-  };
-
-  // ✅ FIXED: Organizer profile navigation functions moved to correct scope
-  const nextOrganizerPhoto = () => {
-    const photos = event.organizer?.photos || [];
-    if (photos.length > 1) {
-      setCurrentOrganizerPhotoIndex((prevIndex) => 
-        prevIndex === photos.length - 1 ? 0 : prevIndex + 1
-      );
-    }
-  };
-
-  const prevOrganizerPhoto = () => {
-    const photos = event.organizer?.photos || [];
-    if (photos.length > 1) {
-      setCurrentOrganizerPhotoIndex((prevIndex) => 
-        prevIndex === 0 ? photos.length - 1 : prevIndex - 1
-      );
-    }
   };
 
   const formatDate = (dateString) => {
@@ -245,120 +232,64 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
 
   const renderOrganizerProfile = () => {
     if (!showOrganizerProfile) return null;
+    const canModerate = organizerId && organizerId !== (user?.id || user?._id);
 
     return (
       <Modal
         visible={showOrganizerProfile}
         animationType="slide"
-        presentationStyle="pageSheet"
         onRequestClose={() => setShowOrganizerProfile(false)}
       >
-        <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.modalHeader}>
+        <View style={styles.profileModalContainer}>
+          <TouchableOpacity style={styles.profileCloseButton} onPress={() => setShowOrganizerProfile(false)}>
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+          {canModerate && (
             <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowOrganizerProfile(false)}
+              style={styles.profileOptionsButton}
+              onPress={() => setShowOrganizerOptionsSheet(true)}
             >
-              <Ionicons name="close" size={24} color="#FFFFFF" />
+              <Ionicons name="ellipsis-horizontal" size={22} color="white" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Event Organizer</Text>
-            {organizerId && organizerId !== (user?.id || user?._id) ? (
-              <TouchableOpacity
-                style={styles.headerSpacer}
-                onPress={() => setShowOrganizerOptionsSheet(true)}
-              >
-                <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.headerSpacer} />
-            )}
-          </View>
+          )}
 
           <ScrollView style={styles.modalContent}>
-            {/* Organizer Photo Section */}
-            <View style={styles.organizerSection}>
-              {event.organizer?.photos && event.organizer.photos.length > 0 ? (
-                <>
-                  <Image 
-                    source={{ uri: event.organizer.photos[currentOrganizerPhotoIndex].url }} 
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                  />
-                  
-                  {/* Navigation for multiple photos */}
-                  {event.organizer.photos.length > 1 && (
-                    <>
-                      <TouchableOpacity 
-                        style={styles.carouselNavLeft}
-                        onPress={prevOrganizerPhoto}
-                      >
-                        <Ionicons name="chevron-back" size={24} color="white" />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={styles.carouselNavRight}
-                        onPress={nextOrganizerPhoto}
-                      >
-                        <Ionicons name="chevron-forward" size={24} color="white" />
-                      </TouchableOpacity>
-                      
-                      {/* Photo indicators */}
-                      <View style={styles.carouselIndicators}>
-                        {event.organizer.photos.map((_, index) => (
-                          <View
-                            key={index}
-                            style={[
-                              styles.carouselIndicator,
-                              index === currentOrganizerPhotoIndex && styles.activeCarouselIndicator
-                            ]}
-                          />
-                        ))}
-                      </View>
-                    </>
-                  )}
-                </>
-              ) : (
-                <View style={styles.previewImagePlaceholder}>
-                  <View style={styles.placeholderAvatar}>
-                    <Text style={styles.placeholderAvatarText}>
-                      {(event.organizer?.name || 'U').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
+            <ProfilePreviewCard profile={event.organizer} />
 
-            {/* Profile Info */}
-            <View style={styles.profileInfo}>
-              <Text style={styles.organizerProfileName}>
-                {event.organizer?.name || 'Unknown Organizer'}
-              </Text>
-              
-              {event.organizer?.bio && (
-                <Text style={styles.organizerBio}>
-                  {event.organizer.bio}
+            {/* Event organizer stats */}
+            <View style={styles.organizerStats}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>
+                  {event.organizer?.eventsOrganized?.length || 0}
                 </Text>
-              )}
+                <Text style={styles.statLabel}>Events Organized</Text>
+              </View>
 
-              {/* Event organizer stats could go here */}
-              <View style={styles.organizerStats}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {event.organizer?.eventsOrganized?.length || 0}
-                  </Text>
-                  <Text style={styles.statLabel}>Events Organized</Text>
-                </View>
-                
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>
-                    {event.organizer?.rating?.toFixed(1) || 'New'}
-                  </Text>
-                  <Text style={styles.statLabel}>Rating</Text>
-                </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>
+                  {event.organizer?.rating?.toFixed(1) || 'New'}
+                </Text>
+                <Text style={styles.statLabel}>Rating</Text>
               </View>
             </View>
           </ScrollView>
+
+          {/* Nested inside this Modal, not as a sibling of the card - a
+              separate top-level Modal opened while this pageSheet-style one
+              is already showing gets queued behind it on iOS/Android until
+              this one closes, which made Block/Report appear to do nothing
+              until you closed the profile first. */}
+          <ActionSheet
+            visible={showOrganizerOptionsSheet}
+            options={organizerOptionsSheetOptions}
+            onClose={() => setShowOrganizerOptionsSheet(false)}
+          />
+          <ActionSheet
+            visible={showOrganizerReportSheet}
+            title="Why are you reporting this user?"
+            options={organizerReportSheetOptions}
+            onClose={() => setShowOrganizerReportSheet(false)}
+          />
         </View>
       </Modal>
     );
@@ -502,18 +433,6 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
 
       {/* Render organizer profile modal */}
       {renderOrganizerProfile()}
-
-      <ActionSheet
-        visible={showOrganizerOptionsSheet}
-        options={organizerOptionsSheetOptions}
-        onClose={() => setShowOrganizerOptionsSheet(false)}
-      />
-      <ActionSheet
-        visible={showOrganizerReportSheet}
-        title="Why are you reporting this user?"
-        options={organizerReportSheetOptions}
-        onClose={() => setShowOrganizerReportSheet(false)}
-      />
     </View>
   );
 }
@@ -690,123 +609,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-  // Organizer Profile Modal Styles
-  modalContainer: {
+  // Organizer Profile Modal Styles - mirrors ChatScreen's profile modal
+  // (same ProfilePreviewCard, same floating close/options buttons) so the
+  // profile view looks and behaves the same everywhere it's shown.
+  profileModalContainer: {
     flex: 1,
     backgroundColor: '#000000',
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1A1A1A',
+  profileCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 6,
   },
-  closeButton: {
-    padding: 4,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  headerSpacer: {
-    width: 32,
+  profileOptionsButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 6,
   },
   modalContent: {
     flex: 1,
   },
-  organizerSection: {
-    position: 'relative',
-    height: height * 0.5,
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  previewImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#1A1A1A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#333333',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  placeholderAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 36,
-    fontWeight: '600',
-  },
-  carouselNavLeft: {
-    position: 'absolute',
-    left: 16,
-    top: '50%',
-    marginTop: -20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  carouselNavRight: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    marginTop: -20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  carouselIndicators: {
-    position: 'absolute',
-    bottom: 16,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  carouselIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  activeCarouselIndicator: {
-    backgroundColor: 'white',
-  },
-  profileInfo: {
-    padding: 20,
-  },
-  organizerProfileName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  organizerBio: {
-    fontSize: 16,
-    color: '#C7C4C4',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
   organizerStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginHorizontal: 16,
+    paddingVertical: 20,
     paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#1A1A1A',
