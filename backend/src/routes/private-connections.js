@@ -144,7 +144,11 @@ router.post('/invite', [protect, requireVerified,
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
-    const { status = 'accepted' } = req.query;
+    // Default includes 'blocked' alongside 'accepted' - a blocked chat is
+    // still yours, just silenced. Excluding it entirely (the old
+    // behavior) meant blocking someone made the thread vanish from the
+    // list with no way back in to ever unblock them.
+    const { status = ['accepted', 'blocked'] } = req.query;
 
     console.log(`📱 Getting private connections for user ${req.user.id}, status: ${status}`);
 

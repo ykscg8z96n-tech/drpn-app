@@ -217,9 +217,8 @@ privateConnectionSchema.statics.sendInvite = function(fromUserId, toUserId, orig
 privateConnectionSchema.statics.getUserConnections = async function(userId, status = 'accepted') {
   const connections = await this.find({
     $or: [{ participant: userId }, { otherUser: userId }],
-    status: status,
-    isArchived: false,
-    'chatParticipation.isBlocked': false
+    status: Array.isArray(status) ? { $in: status } : status,
+    isArchived: false
   })
   .populate('participant', 'name photos isOnline lastActive')
   .populate('otherUser', 'name photos isOnline lastActive')
