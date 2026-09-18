@@ -859,6 +859,12 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={16} color="#666666" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('BlockedUsers')}>
+          <Ionicons name="ban-outline" size={24} color="#666666" />
+          <Text style={styles.actionText}>Blocked Users</Text>
+          <Ionicons name="chevron-forward" size={16} color="#666666" />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.actionButton} onPress={() => setShowChangePassword(true)}>
           <Ionicons name="lock-closed-outline" size={24} color="#666666" />
           <Text style={styles.actionText}>Change Password</Text>

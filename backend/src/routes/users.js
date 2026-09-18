@@ -10,7 +10,7 @@ const PrivateConnection = require('../models/PrivateConnection');
 const { protect } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 const { getBotUserId } = require('../services/botUser');
-const { getOrCreatePrivateConnection, sendWelcomeMessage, postSystemAnnouncement, sendBotNotice } = require('../services/botNotice');
+const { getOrCreatePrivateConnection, sendWelcomeMessage, postSystemAnnouncement, sendBotNotice, postModerationNotice } = require('../services/botNotice');
 const { cancelEventForRoster } = require('../services/eventLifecycle');
 
 // No need for category validation since users don't have preferred categories
@@ -134,6 +134,24 @@ router.post('/verify', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/blocked
+// @desc    List everyone the current user has blocked (populated with
+//          name/photo), for the Blocked Users settings screen. Registered
+//          before /block/:userId and /:id so "blocked" is never matched
+//          as an :id/:userId param.
+// @access  Private
+router.get('/blocked', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .select('blockedUsers')
+      .populate('blockedUsers', 'name photos');
+    res.json({ success: true, data: user.blockedUsers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   POST /api/users/block/:userId
 // @desc    Account-level block - separate from PrivateConnection's own
 //          per-connection block. Stops the blocked user's messages from
@@ -175,6 +193,12 @@ router.post('/block/:userId', protect, async (req, res) => {
     });
     await Promise.all(connections.map(c => c.blockUser()));
 
+    try {
+      await postModerationNotice(req.user.id, userId, 'blocked', req);
+    } catch (noticeError) {
+      console.error('⚠️ Failed to post block notice:', noticeError);
+    }
+
     res.json({ success: true, data: user });
   } catch (error) {
     console.error('❌ Error blocking user:', error);
@@ -202,6 +226,12 @@ router.delete('/block/:userId', protect, async (req, res) => {
       ]
     });
     await Promise.all(connections.map(c => c.unblockUser()));
+
+    try {
+      await postModerationNotice(req.user.id, userId, 'unblocked', req);
+    } catch (noticeError) {
+      console.error('⚠️ Failed to post unblock notice:', noticeError);
+    }
 
     res.json({ success: true, data: user });
   } catch (error) {
@@ -788,6 +818,34 @@ router.delete('/me', protect, async (req, res) => {
     res.json({ success: true, message: 'Account deleted' });
   } catch (error) {
     console.error('Error deleting account:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/users/:id/common-events
+// @desc    Events/groups both the current user and :id are on the roster
+//          of (an admin, or an accepted applicant) - powers the "In
+//          Common" section on a profile viewer. Registered before the
+//          bare GET /:id below so it isn't shadowed by it.
+// @access  Private
+router.get('/:id/common-events', protect, async (req, res) => {
+  try {
+    const otherId = req.params.id;
+    const onRoster = (userId) => ({
+      $or: [
+        { admins: userId },
+        { applicants: { $elemMatch: { userId, status: 'accepted' } } }
+      ]
+    });
+
+    const events = await Event.find({
+      isArchived: { $ne: true },
+      $and: [onRoster(req.user.id), onRoster(otherId)]
+    }).select('name type category photos currentAttendees groupSize capacity eventDate');
+
+    res.json({ success: true, data: events });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

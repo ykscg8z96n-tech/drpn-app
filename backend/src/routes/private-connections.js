@@ -8,6 +8,7 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const { protect, requireVerified } = require('../middleware/auth');
+const { postModerationNotice } = require('../services/botNotice');
 
 // @route   POST /api/private-connections/invite
 // @desc    Send private chat invite to another user
@@ -350,6 +351,12 @@ router.post('/:id/block', protect, async (req, res) => {
     await User.findByIdAndUpdate(req.user.id, { $addToSet: { blockedUsers: otherUserId } });
     await User.findByIdAndUpdate(otherUserId, { $addToSet: { blockedUsers: req.user.id } });
 
+    try {
+      await postModerationNotice(req.user.id, otherUserId, 'blocked', req);
+    } catch (noticeError) {
+      console.error('⚠️ Failed to post block notice:', noticeError);
+    }
+
     console.log(`🚫 Private connection blocked by ${req.user.id}`);
 
     res.json({
@@ -403,6 +410,12 @@ router.delete('/:id/block', protect, async (req, res) => {
       : connection.participant;
     await User.findByIdAndUpdate(req.user.id, { $pull: { blockedUsers: unblockedUserId } });
     await User.findByIdAndUpdate(unblockedUserId, { $pull: { blockedUsers: req.user.id } });
+
+    try {
+      await postModerationNotice(req.user.id, unblockedUserId, 'unblocked', req);
+    } catch (noticeError) {
+      console.error('⚠️ Failed to post unblock notice:', noticeError);
+    }
 
     console.log(`✅ Private connection unblocked by ${req.user.id}`);
 

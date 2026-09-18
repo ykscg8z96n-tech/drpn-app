@@ -11,11 +11,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { height } = Dimensions.get('window');
 
-export default function ProfilePreviewCard({ profile, isBlocked, onBlockPress, onReportPress }) {
+export default function ProfilePreviewCard({ profile }) {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const photos = profile?.photos || [];
   const hasPhotos = photos.length > 0;
-  const showModeration = !!(onBlockPress || onReportPress);
 
   const prevPhoto = () => {
     setCurrentPhotoIndex((i) => (i === 0 ? photos.length - 1 : i - 1));
@@ -63,23 +62,6 @@ export default function ProfilePreviewCard({ profile, isBlocked, onBlockPress, o
                 {(profile?.name || 'U').charAt(0).toUpperCase()}
               </Text>
             </View>
-          </View>
-        )}
-
-        {/* Block/Report - stacked bottom-right, above the photo's own
-            next-photo arrow so neither overlaps the carousel controls. */}
-        {showModeration && (
-          <View style={styles.moderationStack}>
-            {onReportPress && (
-              <TouchableOpacity style={styles.moderationButton} onPress={onReportPress}>
-                <Ionicons name="flag-outline" size={20} color="white" />
-              </TouchableOpacity>
-            )}
-            {onBlockPress && (
-              <TouchableOpacity style={styles.moderationButton} onPress={onBlockPress}>
-                <Ionicons name={isBlocked ? 'checkmark-circle-outline' : 'ban-outline'} size={20} color="white" />
-              </TouchableOpacity>
-            )}
           </View>
         )}
       </View>
@@ -173,20 +155,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-  },
-  moderationStack: {
-    position: 'absolute',
-    bottom: 64,
-    right: 16,
-    gap: 8,
-  },
-  moderationButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   carouselIndicator: {
     width: 8,

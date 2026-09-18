@@ -110,7 +110,26 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   // backend/src/models/User.js) - blocking an organizer here also excludes
   // their events/groups from the swipe deck going forward (see the
   // GET /events/nearby query on the backend).
-  const handleToggleOrganizerBlock = async () => {
+  const handleToggleOrganizerBlock = () => {
+    if (!organizerId) return;
+    if (isOrganizerBlocked()) {
+      performToggleOrganizerBlock();
+      return;
+    }
+    // Only confirm before blocking, not unblocking - the Block icon sits
+    // right next to the photo's next-photo arrow, easy to tap by mistake
+    // while just browsing photos.
+    Alert.alert(
+      `Block ${event.organizer?.name || 'this user'}?`,
+      "Their events and groups will no longer show up in your swipe deck.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: performToggleOrganizerBlock },
+      ]
+    );
+  };
+
+  const performToggleOrganizerBlock = async () => {
     if (!organizerId) return;
     const blocked = isOrganizerBlocked();
     try {
