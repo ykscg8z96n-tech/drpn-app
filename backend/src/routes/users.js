@@ -152,11 +152,29 @@ router.post('/block/:userId', protect, async (req, res) => {
     if (!target) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+    // Symmetric, same as PrivateConnection's own block - neither side can
+    // message the other either way, so both accounts get each other
+    // blocked rather than just one direction.
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { $addToSet: { blockedUsers: userId } },
       { new: true }
     ).select('-password');
+    await User.findByIdAndUpdate(userId, { $addToSet: { blockedUsers: req.user.id } });
+
+    // Mirror onto any existing PrivateConnection between these two users
+    // (both direction docs, if present) - it's the one messages.js/
+    // PrivateChatScreen check to show "this conversation is blocked",
+    // so blocking from an event/group chat's profile viewer needs to
+    // reach it too, not just this account-level list.
+    const connections = await PrivateConnection.find({
+      $or: [
+        { participant: req.user.id, otherUser: userId },
+        { participant: userId, otherUser: req.user.id }
+      ]
+    });
+    await Promise.all(connections.map(c => c.blockUser()));
+
     res.json({ success: true, data: user });
   } catch (error) {
     console.error('❌ Error blocking user:', error);
@@ -175,6 +193,16 @@ router.delete('/block/:userId', protect, async (req, res) => {
       { $pull: { blockedUsers: userId } },
       { new: true }
     ).select('-password');
+    await User.findByIdAndUpdate(userId, { $pull: { blockedUsers: req.user.id } });
+
+    const connections = await PrivateConnection.find({
+      $or: [
+        { participant: req.user.id, otherUser: userId },
+        { participant: userId, otherUser: req.user.id }
+      ]
+    });
+    await Promise.all(connections.map(c => c.unblockUser()));
+
     res.json({ success: true, data: user });
   } catch (error) {
     console.error('❌ Error unblocking user:', error);

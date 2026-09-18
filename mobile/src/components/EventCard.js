@@ -9,9 +9,13 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
+import ActionSheet from './ActionSheet';
 
 const { width, height } = Dimensions.get('window');
 // Account for: status bar (~44) + header (~40) + action row (~80) + bottom nav (~80) + margins,
@@ -92,6 +96,75 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
   const [showOrganizerProfile, setShowOrganizerProfile] = useState(false);
   const [currentOrganizerPhotoIndex, setCurrentOrganizerPhotoIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [showOrganizerOptionsSheet, setShowOrganizerOptionsSheet] = useState(false);
+  const [showOrganizerReportSheet, setShowOrganizerReportSheet] = useState(false);
+  const { user, updateUser } = useAuth();
+
+  const organizerId = event.organizer?._id || event.organizer?.id;
+
+  const isOrganizerBlocked = () => {
+    if (!organizerId) return false;
+    return !!user?.blockedUsers?.some(id => (id?._id || id)?.toString?.() === organizerId.toString());
+  };
+
+  // Same account-level block as ChatScreen/PendingApplicationsScreen (see
+  // backend/src/models/User.js) - blocking an organizer here also excludes
+  // their events/groups from the swipe deck going forward (see the
+  // GET /events/nearby query on the backend).
+  const handleToggleOrganizerBlock = async () => {
+    if (!organizerId) return;
+    const blocked = isOrganizerBlocked();
+    try {
+      const response = blocked
+        ? await api.delete(`/users/block/${organizerId}`)
+        : await api.post(`/users/block/${organizerId}`);
+      if (response.data.success) {
+        updateUser({ ...user, blockedUsers: response.data.data.blockedUsers });
+        Alert.alert(
+          blocked ? 'Unblocked' : 'Blocked',
+          blocked
+            ? `You've unblocked ${event.organizer?.name || 'this user'}.`
+            : `You've blocked ${event.organizer?.name || 'this user'}. Their events and groups will no longer show up in your swipe deck.`
+        );
+        if (!blocked) setShowOrganizerProfile(false);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update block status');
+    }
+  };
+
+  const reportReasons = [
+    { label: 'Harassment', value: 'harassment' },
+    { label: 'Spam', value: 'spam' },
+    { label: 'Inappropriate content', value: 'inappropriate_content' },
+    { label: 'Safety concern', value: 'safety_concern' },
+    { label: 'Other', value: 'other' },
+  ];
+
+  const submitOrganizerReport = async (reason) => {
+    try {
+      await api.post('/reports', {
+        reportedUserId: organizerId,
+        reason,
+        context: event.type === 'group' ? 'group_chat' : 'event_chat',
+        contextId: event._id || event.id,
+      });
+      Alert.alert('Report Submitted', 'Thanks for letting us know. Our team will review this.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to submit report');
+    }
+  };
+
+  const organizerOptionsSheetOptions = [
+    {
+      text: isOrganizerBlocked() ? 'Unblock User' : 'Block User',
+      onPress: handleToggleOrganizerBlock,
+      destructive: !isOrganizerBlocked()
+    },
+    { text: 'Report User', onPress: () => setShowOrganizerReportSheet(true), destructive: true },
+  ];
+
+  const organizerReportSheetOptions = reportReasons.map(r => ({ text: r.label, onPress: () => submitOrganizerReport(r.value) }));
 
   const toggleExpanded = () => {
     const next = !expanded;
@@ -190,7 +263,16 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
               <Ionicons name="close" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Event Organizer</Text>
-            <View style={styles.headerSpacer} />
+            {organizerId && organizerId !== (user?.id || user?._id) ? (
+              <TouchableOpacity
+                style={styles.headerSpacer}
+                onPress={() => setShowOrganizerOptionsSheet(true)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.headerSpacer} />
+            )}
           </View>
 
           <ScrollView style={styles.modalContent}>
@@ -420,6 +502,18 @@ export default function EventCard({ event, distance, onImagePress, onExpandChang
 
       {/* Render organizer profile modal */}
       {renderOrganizerProfile()}
+
+      <ActionSheet
+        visible={showOrganizerOptionsSheet}
+        options={organizerOptionsSheetOptions}
+        onClose={() => setShowOrganizerOptionsSheet(false)}
+      />
+      <ActionSheet
+        visible={showOrganizerReportSheet}
+        title="Why are you reporting this user?"
+        options={organizerReportSheetOptions}
+        onClose={() => setShowOrganizerReportSheet(false)}
+      />
     </View>
   );
 }
