@@ -131,7 +131,11 @@ export default function ChatScreen({ route, navigation }) {
         ? await api.delete(`/users/block/${viewingProfile._id}`)
         : await api.post(`/users/block/${viewingProfile._id}`);
       if (response.data.success) {
-        updateUser(response.data.data);
+        // Merge, don't replace - the endpoint returns the raw Mongoose
+        // document (_id, not id), and every "is this me" check elsewhere
+        // in the app compares user?.id. Replacing the whole object made
+        // that undefined for the rest of the session.
+        updateUser({ ...user, blockedUsers: response.data.data.blockedUsers });
         Alert.alert(
           blocked ? 'Unblocked' : 'Blocked',
           blocked
