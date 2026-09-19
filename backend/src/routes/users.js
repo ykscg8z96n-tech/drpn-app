@@ -240,6 +240,51 @@ router.delete('/block/:userId', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/users/follow/:userId
+// @desc    Follow another user - one-directional, no confirmation needed
+//          (unlike a private chat invite). Followed organizers' new
+//          events post a bot DM (see POST /api/events).
+// @access  Private
+router.post('/follow/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (userId === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Cannot follow yourself' });
+    }
+    const target = await User.findById(userId).select('_id');
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $addToSet: { following: userId } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('❌ Error following user:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/users/follow/:userId
+// @desc    Unfollow.
+// @access  Private
+router.delete('/follow/:userId', protect, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { following: userId } },
+      { new: true }
+    ).select('-password');
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('❌ Error unfollowing user:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 const PREMIUM_TRIAL_DAYS = 7;
 
 // @route   POST /api/users/premium-trial

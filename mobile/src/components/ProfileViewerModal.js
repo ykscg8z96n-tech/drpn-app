@@ -71,16 +71,15 @@ export default function ProfileViewerModal({
             // (not render as a sibling top-level Modal outside it), or
             // iOS/Android queues it behind this one instead of stacking it
 }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [commonItems, setCommonItems] = useState([]);
   const [loadingCommon, setLoadingCommon] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
 
   const profileId = profile?._id || profile?.id;
   const isOwnProfile = profileId && (profileId === user?.id || profileId === user?._id);
+  const isFollowing = !!profileId && !!user?.following?.some(id => (id?._id || id)?.toString?.() === profileId.toString());
 
   useEffect(() => {
-    setIsFollowing(false);
     if (!profileId || isOwnProfile) {
       setCommonItems([]);
       return;
@@ -107,9 +106,22 @@ export default function ProfileViewerModal({
   const explainFollowing = () => {
     Alert.alert(
       'What does Following do?',
-      "Following lets you keep up with someone's public activity - it doesn't notify them, and it's separate from blocking or messaging.",
-      [{ text: 'Got it' }]
+      "Following lets you keep up with someone's public activity - it doesn't notify them, and it's separate from blocking or messaging. You'll get a message here from the DRPN bot whenever someone you follow adds a new event (not groups, since those aren't a one-time thing)."
     );
+  };
+
+  const handleToggleFollow = async () => {
+    if (!profileId) return;
+    try {
+      const response = isFollowing
+        ? await api.delete(`/users/follow/${profileId}`)
+        : await api.post(`/users/follow/${profileId}`);
+      if (response.data.success) {
+        updateUser({ ...user, following: response.data.data.following });
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update follow status');
+    }
   };
 
   return (
@@ -151,7 +163,7 @@ export default function ProfileViewerModal({
 
           {showActions && (
             <View style={styles.actionsSection}>
-              <TouchableOpacity style={styles.actionRow} onPress={() => setIsFollowing(f => !f)}>
+              <TouchableOpacity style={styles.actionRow} onPress={handleToggleFollow}>
                 <Ionicons name="bookmark" size={22} color={isFollowing ? '#0078FF' : '#666666'} />
                 <Text style={styles.actionText}>Add to Favorites</Text>
                 <TouchableOpacity onPress={explainFollowing} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>

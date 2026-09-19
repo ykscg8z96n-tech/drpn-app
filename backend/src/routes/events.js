@@ -493,6 +493,22 @@ router.post('/', [protect,
       }
     }
 
+    // Followers get a heads-up when someone they follow publishes a new
+    // event - groups don't trigger this (an ongoing group isn't a one-time
+    // thing to be notified about the same way a specific event is).
+    if (event.type === 'event') {
+      try {
+        const followers = await User.find({ following: req.user.id }).select('_id');
+        await Promise.all(followers.map(follower => sendBotNotice(
+          follower._id,
+          `${req.user.name || 'Someone you follow'} added a new event: "${event.name}"!`,
+          req
+        )));
+      } catch (followError) {
+        console.error('⚠️ Failed to notify followers of new event:', followError);
+      }
+    }
+
     console.log('✅ Event created successfully:', event._id);
 
     res.status(201).json({

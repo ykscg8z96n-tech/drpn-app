@@ -166,6 +166,15 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  // Who this account follows - one-directional (unlike blockedUsers,
+  // which is always mirrored on both sides). Followed organizers get a
+  // bot DM (see routes/events.js's POST / and services/botNotice.js)
+  // when they publish a new event - groups don't trigger this, since
+  // groups aren't a one-time thing to be notified about the same way.
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   settings: {
     notifications: {
       push: { type: Boolean, default: true },

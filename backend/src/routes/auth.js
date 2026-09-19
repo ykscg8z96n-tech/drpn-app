@@ -88,7 +88,8 @@ router.post('/register', authLimiter, [
         searchRadius: user.searchRadius,
         reputation: user.reputation,
         location: user.location,
-        blockedUsers: user.blockedUsers
+        blockedUsers: user.blockedUsers,
+        following: user.following
       }
     });
   } catch (error) {
@@ -157,7 +158,8 @@ router.post('/login', authLimiter, [
         eventsJoined: user.eventsJoined,
         eventsOrganized: user.eventsOrganized,
         lastActive: user.lastActive,
-        blockedUsers: user.blockedUsers
+        blockedUsers: user.blockedUsers,
+        following: user.following
       }
     });
   } catch (error) {
